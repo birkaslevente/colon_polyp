@@ -1,0 +1,28 @@
+#
+# Minimális futtatási függőségek a GUI apphoz (`live_capture_app.py`)
+# és a feature-map vizualizációhoz (`visualize_features.py`).
+#
+# Telepítés:
+#   python -m pip install -r requirements_app.txt
+#
+# Megjegyzés:
+# - Javasolt Python: 3.11.x (a projekt zenbook_venv: 3.11.5). Más főverzióval
+#   a PyInstaller build és a wheel-ek eltérhetnek → DLL / import hibák lehetnek.
+# - scripts/install_dev.ps1: előbb CPU vagy CUDA PyTorch wheel (index-url), majd
+#   ez a fájl (torch/torchvision sorok duplikálás nélkül). GPU: -GpuTorch.
+# - Kézi pip esetén PyTorch: https://pytorch.org/ (CPU/CUDA választás).
+#
+
+# Core
+numpy
+pillow
+opencv-python
+matplotlib
+customtkinter
+
+# Deep learning
+torch
+torchvision
+segmentation-models-pytorch
+tensorflow
+

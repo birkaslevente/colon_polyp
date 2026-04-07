@@ -1,0 +1,727 @@
+% !TEX program = xelatex
+\documentclass[12pt, a4paper]{report}
+
+% --- UNIVERSAL PREAMBLE BLOCK ---
+\usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=3cm, right=2.5cm]{geometry}
+\usepackage{fontspec}
+\usepackage{titlesec} % Fejezetcímek formázásához
+\usepackage{setspace} % Sortávolság állításához
+
+\usepackage[magyar, bidi=bidi, provide=*]{babel}
+
+\babelprovide[import, onchar=ids fonts]{magyar}
+\babelprovide[import, onchar=ids fonts]{english}
+
+% Set default/Latin font to Serif (Times New Roman style) in the main (rm) slot
+% \babelfont{rm}{Noto Serif}
+% Assign a specific font for Hungarian text
+% \babelfont[magyar]{rm}{Noto Serif}
+% Fallback to standard LaTeX fonts if Noto Serif is missing, or use Times New Roman if available
+\setmainfont{Times New Roman}
+
+% Add because main language is not English
+\usepackage{enumitem}
+\setlist[itemize]{label=-}
+
+% Additional packages for formatting
+\usepackage{parskip}
+\usepackage{pmboxdraw} % Box-drawing karakterek támogatásához
+\usepackage{newunicodechar}
+\newunicodechar{├}{\textSFviii}
+\newunicodechar{─}{\textSFx}
+\newunicodechar{└}{\textSFii}
+\newunicodechar{│}{\textSFxi}
+\usepackage{csquotes}
+\usepackage[backend=biber, style=ieee]{biblatex} % Bibliográfia kezelés (IEEE stílus)
+\addbibresource{irodalom.bib} % Minta fájl hivatkozás
+\usepackage{graphicx} % Képek beszúrásához
+
+% Fejezetcímek formázása, hogy hasonlítson a szakdolgozati stílusra
+\titleformat{\chapter}[display]
+  {\normalfont\bfseries\huge}
+  {\chaptertitlename\ \thechapter}
+  {20pt}
+  {\Huge}
+
+% Adatok a címlaphoz
+\newcommand{\szerzoNeve}{Birkás Levente}
+\newcommand{\cim}{Valós idejű Polip Szegmentáló Keretrendszer}
+\newcommand{\belsoKonzulens}{Prof. Dr. Horváth Zoltán}
+\newcommand{\kulsoKonzulens}{--}
+\newcommand{\tanszek}{Informatikai és Villamosmérnöki Kar}
+
+\begin{document}
+
+% --- CÍMLAP GENERÁLÁS (Manuális, sze-thesis stílus utánzat) ---
+\begin{titlepage}
+    \centering
+    \vspace*{0.8cm}
+    
+    \includegraphics[width=0.22\textwidth]{uni_logo.png}\par
+    \vspace{1cm}
+    
+    {\Large\bfseries \tanszek \par}
+    
+    \vspace{2.2cm}
+    
+    {\Huge\bfseries \cim \par}
+    
+    \vspace{1cm}
+    
+    {\LARGE Szakdolgozat \par}
+    
+    \vspace{2.2cm}
+    
+    \begin{minipage}{0.45\textwidth}
+        \begin{flushleft} \large
+            \emph{Belső konzulens:}\\
+            \belsoKonzulens \\
+            \vspace{0.5cm}
+            \emph{Külső konzulens:}\\
+            \kulsoKonzulens
+        \end{flushleft}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.45\textwidth}
+        \begin{flushright} \large
+            \emph{Készítette:}\\
+            \szerzoNeve
+        \end{flushright}
+    \end{minipage}
+    
+    \vfill
+    
+    {\large \the\year \par}
+\end{titlepage}
+
+% --- TARTALOMJEGYZÉK ---
+\tableofcontents
+\clearpage
+
+\onehalfspacing
+
+
+% --- TARTALOM ---
+
+\chapter{Bevezetés}
+\textit{Becsült terjedelem: 2-3 oldal}
+
+\section{Motiváció és klinikai háttér}
+
+\subsection{A kolonoszkópia szerepe és az „elmulasztott polipok” problémája}
+A vastagbélrák szűrésének és megelőzésének jelenlegi "gold standard" eljárása a kolonoszkópia, amely lehetővé teszi a vastagbél nyálkahártyájának közvetlen vizuális ellenőrzését, valamint a prekurzor léziók, azaz a polipok azonnali eltávolítását (polypectomia). Bár ez a vizsgálat a leghatékonyabb eszköz a gasztroenterológusok kezében, a diagnosztikai pontosságot erősen befolyásolják az emberi tényezők. Az endoszkópos orvos fáradtsága, a figyelem lankadása, vagy a vizsgálat technikai nehézségei (pl. rossz bél-előkészítés) jelentős hibaarányhoz vezethetnek. A szakirodalmi adatok szerint a polipok elmulasztási aránya (miss rate) elérheti a 20-25\%-ot is \cite{leufkens2012factors}, különösen a kisméretű, lapos (sessile) vagy a bélredők mögött megbújó elváltozások esetében. Minden egyes fel nem ismert adenoma növeli a későbbi intervallum-rák kialakulásának kockázatát, ezért az Adenoma Detektálási Arány (ADR) növelése klinikai prioritás.
+
+\subsection{A vastagbélrák népegészségügyi jelentősége}
+A colorectalis rák (CRC) napjaink egyik legjelentősebb népegészségügyi kihívása világszerte. A WHO és a globális rákkutatási szervezetek (GLOBOCAN) statisztikái szerint a vastagbélrák a harmadik leggyakoribb diagnosztizált ráktípus, és a második vezető halálok a daganatos megbetegedések körében \cite{who_cancer}. A betegség patogenezise jellemzően a jóindulatú polipokból indul ki, amelyek évek alatt rosszindulatúvá fajulhatnak. Ez a lassú progresszió lehetőséget ad a hatékony prevencióra: a polipok időben történő felismerése és eltávolítása megszakítja a rákosodás folyamatát, így bizonyítottan csökkenti mind az incidenciát, mind a mortalitást. Ebben a kontextusban a mesterséges intelligencia alapú döntéstámogató rendszerek nem csupán technológiai újítást, hanem életmentő eszközt jelenthetnek.
+
+\subsection{A számítógépes diagnosztika szükségessége a valós idejű vizsgálatok során}
+A diagnosztikai hibák csökkentése és az adenoma detektálási arány (ADR) növelése érdekében egyre nagyobb igény mutatkozik olyan számítógépes diagnosztikai (CADx) rendszerek iránt, amelyek valós időben képesek támogatni az endoszkópos szakemberek munkáját. Egy ilyen mesterséges intelligencia alapú "második szempár" képes valós időben feldolgozni a videófolyamot, vagy igény szerint (on-demand) azonnali elemzést nyújtani a gyanús területekről. A rendszer architektúrája biztosítja az alacsony késleltetésű (low-latency) inferenciát, amely elengedhetetlen a klinikai munkafolyamatba való illesztéshez, ezzel minimalizálva az emberi mulasztás kockázatát. A CAD rendszerek legfőbb előnye, hogy mentesek a biológiai fáradtságtól, és objektív, konzisztens döntéstámogatást nyújtanak még a hosszú műszakok végén is. Ezen felül csökkentik a vizsgálók közötti szubjektív eltéréseket (inter-observer variability), és különösen hasznosak lehetnek a kevésbé tapasztalt rezidensek képzésében, mivel vizuálisan ráirányítják a figyelmet a nehezen észrevehető elváltozásokra.
+
+\section{Technológiai kihívások}
+
+\subsection{Élő kép megjelenítés és igény szerinti elemzés követelményei}
+A klinikai környezetben a rendszer két elkülönülő követelményt teljesít: az élő videó folyamatos, zökkenőmentes megjelenítését és a felhasználó által kezdeményezett, azonnali elemzést. Az élő megjelenítésnél a megjelenítési sebességnek (FPS) el kell érnie a vizsgálat során kényelmes érzetet nyújtó szintet (általában 25--30 képkocka/másodperc), hogy az orvos ne érezze a késleltetést vagy a megakadást. Az elemzés nem minden képkockán történik, hanem gombnyomásra (vagy rövidített billentyűre): ekkor a rendszer a pillanatnyi képkockát rögzíti, szegmentálja és osztályozza. Ennél a működésmódnál a fő teljesítménymutató a válaszidő (end-to-end latency), azaz a gombnyomás és a képernyőn megjelenő szegmentált eredmény és klasszifikáció közötti idő, amelynek célszerűen 100-200 milliszekundum alatt kell maradnia, hogy a felhasználói élmény folyamatos maradjon.
+
+\subsection{HDMI videójel feldolgozásának nehézségei orvosi környezetben}
+Az orvosi endoszkópos tornyokból érkező videójel digitális feldolgozása számos technikai akadályba ütközik, kezdve a megfelelő capture hardver kiválasztásától a jelfolyam stabil, veszteségmentes beolvasásáig. A nagyfelbontású (Full HD vagy 4K) HDMI jelek valós idejű digitalizálása és a képkockák szinkronizálása a feldolgozó algoritmussal kritikus fontosságú, mivel bármilyen képtörés vagy csúszás diagnosztikai bizonytalanságot okozhat. További nehézséget jelent a különböző gyártók (Olympus, Pentax, Fujifilm) eltérő színprofiljainak és videóformátumainak kezelése, valamint a nagy sávszélességű adatfolyam memóriába történő gyors mozgatása (Direct Memory Access - DMA) anélkül, hogy a CPU-t túlterhelnénk, ami a feldolgozás lassulásához vezetne.
+
+\subsection{Különböző AI modellek integrációja}
+Komoly szoftverarchitekturális kihívást jelent több, eltérő feladatot ellátó mélytanuló modell – például egy erőforrás-igényes szemantikus szegmentáló és egy klasszifikációs hálózat – párhuzamos futtatása egyetlen keretrendszeren belül. A Python környezet sajátosságaiból adódóan a modellek közötti hatékony erőforrás-megosztás és az adatátvitel optimalizálása elengedhetetlen a rendszer összeomlásának vagy belassulásának elkerülése érdekében. A GPU memória (VRAM) korlátos erőforrás, amelyért a különböző modellek versengenek; emellett a Python Global Interpreter Lock (GIL) mechanizmusa megnehezíti a valódi párhuzamosítást (multithreading), ezért gyakran multiprocessing megoldásokra vagy aszinkron végrehajtásra van szükség a zökkenőmentes felhasználói élmény biztosításához.
+
+\section{A szakdolgozat célkitűzései}
+
+\subsection{AI-alapú szegmentáló modell fejlesztése és tanítása}
+A dolgozat elsődleges célja egy olyan nagy pontosságú, DeepLabV3+ architektúrára épülő konvolúciós neurális hálózat implementálása és tanítása, amely képes a vastagbél-polipok pixel-szintű szegmentálására. A modell fejlesztése során kiemelt figyelmet fordítunk a MobileNetV2 backbone alkalmazására, hogy megtaláljuk az optimális egyensúlyt a detektálási pontosság és a futási sebesség között, minimalizálva a számítási költséget a pontosság jelentős csökkenése nélkül.
+
+\subsection{Moduláris Python alkalmazás élő videó megjelenítésre és gombnyomásra történő szegmentálásra és klasszifikációra}
+A második célkitűzés egy moduláris Python alkalmazás megvalósítása, amely élő videóforrásból (kamera, videófájl vagy szimulációs képmappa) folyamatosan megjeleníti a képet, és a felhasználó gombnyomására (``Capture \& Analyze'') a pillanatnyi képkockán elvégzi a polip szegmentálást és a klasszifikációt. A szoftver ``hídként'' funkcionál a bemeneti eszköz és a mélytanulási modellek között: a videófolyamot dedikált szál kezeli, míg az elemzés igény szerint, a rögzített képkockán fut. A megjelenítés három panelből áll: élő kép, a hálózatnak beadott (középre vágott) bemenet és a szegmentált polip eredmény; a klasszifikátor kimenete (pl. adenóma/hiperplasztikus) szintén megjelenik. Az architektúra lehetővé teszi külső osztályozó modulok cseréjét a meglévő interfész révén.
+
+\subsection{Interfész biztosítása külső osztályozó modulok számára}
+A rendszer jövőtállósága és bővíthetősége érdekében célkitűzésként szerepelt egy szabványosított interfész (API) kidolgozása, amely lehetővé teszi külső, akár más fejlesztők által készített osztályozó (klasszifikációs) modulok egyszerű integrációját. Ez a ``plug-and-play'' architektúra biztosítja, hogy a szegmentált polipokról készült képrészleteket (ROI) a rendszer automatikusan továbbíthassa szövettani becslést végző algoritmusoknak, így támogatva a komplex diagnosztikai döntéshozatalt.
+
+\section{A dolgozat felépítése}
+A szakdolgozat szerkezeti felépítése a logikai fejlesztési folyamatot követi: a bevezetést követően a második fejezetben ismertetem a szükséges elméleti hátteret és a felhasznált technológiákat. A harmadik fejezet a szegmentáló modell tervezését és tanítását, míg a negyedik a szoftveralkalmazás implementációját részletezi, végül az ötödik fejezetben bemutatom az elért eredményeket és a rendszer teljesítményének kiértékelését. A hatodik fejezet összefoglalja a kutatás eredményeit és kijelöli a lehetséges jövőbeli fejlesztési irányokat.
+
+\chapter{Elméleti háttér és módszertan}
+\textit{Becsült terjedelem: 8-10 oldal}
+
+\section{Alapfogalmak és definíciók}
+
+\subsection{Szemantikus szegmentáció vs. objektum detektálás}
+A számítógépes látás területén alapvető különbséget kell tenni az objektum detektálás (object detection), amely téglalap alakú keretekkel (bounding box) jelöli a tárgyakat, és a szemantikus szegmentáció között, amely pixel-szintű besorolást végez. Jelen dolgozatban a szemantikus szegmentáció mellett szóló érvek kerülnek előtérbe, mivel orvosi szempontból a polipok pontos alakjának és kiterjedésének meghatározása kritikusabb információt hordoz, mint pusztán a pozíciójuk behatárolása. A pixelpontos maszk lehetővé teszi a lézió területének kvantitatív mérését (pl. térfogat- vagy felszínbecslés), a reszekciós szegélyek pontosabb megítélését, valamint a vizsgálatok egységes, reprodukálható dokumentálását. A klinikai gyakorlatban a szemantikus szegmentáció vizuális kiemelés formájában jelenik meg: a képernyőn a gyanús terület színes maszkja azonnal felhívja az orvos figyelmét a potenciális elváltozásra, csökkentve a kognitív terhelést és a figyelmi hibák kockázatát. Emellett a maszkok hosszú távon oktatási és audit célokat is szolgálhatnak, mivel lehetővé teszik a vizsgálatok utólagos elemzését és a detektálási teljesítmény objektív összehasonlítását.
+
+\subsection{Kiértékelési metrikák}
+A szemantikus szegmentációs modellek teljesítményének objektív összehasonlításához elengedhetetlen a szakirodalomban elfogadott matematikai metrikák definiálása. A dolgozat során két alapvető mérőszámot, az Intersection over Union (IoU) és a Dice-együtthatót (Dice Similarity Coefficient) alkalmazzuk a prediktált maszk ($P$) és a valós referencia maszk ($G$, Ground Truth) közötti hasonlóság mérésére.
+
+\subsubsection{Metszet és unió hányadosa}
+Az IoU, más néven Jaccard-index, a legelterjedtebb metrika a szegmentációs feladatokban. Értéke a predikció és a valós maszk metszetének és uniójának hányadosa:
+\begin{equation}
+IoU(P, G) = \frac{|P \cap G|}{|P \cup G|} = \frac{|P \cap G|}{|P| + |G| - |P \cap G|}
+\end{equation}
+Az IoU értéke 0 és 1 (vagy 0\% és 100\%) között változik; a 0 az átfedés teljes hiányát, az 1 a tökéletes egyezést jelenti. Mivel az unió (a nevező) magában foglalja a hibásan detektált területeket (fals pozitív) és a nem detektált területeket (fals negatív) is, az IoU szigorúan bünteti a hibákat.
+
+\subsubsection{Dice-együttható}
+A Dice-együttható, amely matematikailag ekvivalens az F1-score-ral, a metszet kétszeresét viszonyítja a két halmaz elemszámának összegéhez:
+\begin{equation}
+Dice(P, G) = \frac{2 \cdot |P \cap G|}{|P| + |G|}
+\end{equation}
+A Dice-együttható szintén a [0, 1] intervallumon mozog. Orvosi képfeldolgozásban különösen népszerű, mivel közvetlenebbül fejezi ki a pozitív találatok (polip pixelek) arányát, és kevésbé érzékeny a háttér méretére. Fontos megjegyezni, hogy ugyanazon szegmentációs eredmény esetén a Dice érték mindig nagyobb vagy egyenlő, mint az IoU érték ($Dice \ge IoU$), mivel a nevezője kisebb ($|P|+|G|$ vs. $|P \cup G|$).
+
+\subsection{Valós idejű rendszerek teljesítménymutatói}
+Egy videófeldolgozó rendszer hatékonyságának mérésére két fő mérőszámot, a throughput-ot (áteresztőképesség) és a látenciát (késleltetés) alkalmazzuk. Míg a throughput azt mutatja meg, hogy egységnyi idő alatt hány képkockát képes a rendszer feldolgozni (FPS), addig a látencia azt az időintervallumot jelöli, amely a képkocka beérkezése és a feldolgozott eredmény képernyőn való megjelenése között telik el. Orvosi környezetben, különösen az intervenciós eljárásoknál, a látencia kritikusabb tényező lehet, mint a maximális FPS. Ha a rendszer késleltetése meghaladja a 100-200 milliszekundumot, az zavarhatja az orvos kéz-szem koordinációját, mivel az eszköz mozgatása és a képernyőn látott reakció között érezhető csúszás lép fel ("rubber band effect"). Ezért a fejlesztés során a cél nem pusztán a magas FPS elérése, hanem a stabil, alacsony késleltetésű (low-latency) működés biztosítása volt.
+
+\section{Irodalmi áttekintés}
+
+\subsection{Mélytanulás az orvosi képfeldolgozásban}
+Az orvosi képfeldolgozás területén a mélytanulás (Deep Learning) megjelenése forradalmi változásokat hozott, különösen a Fully Convolutional Networks (FCN) és az U-Net architektúra bevezetésével. Az U-Net, szimmetrikus enkóder-dekóder felépítésével és skip connection megoldásaival, máig az orvosi szegmentáció de facto standardjának számít, bár a valós idejű alkalmazásokban korlátokba ütközhet a magas paraméterszám és a számítási komplexitás miatt. A hagyományos gépi tanulási módszerekkel (pl. SVM, Random Forest) szemben, ahol a jellemzőket (szín, textúra, alak) manuálisan kellett definiálni ("hand-crafted features"), a mélytanuló modellek (CNN) képesek az adatokból automatikusan kinyerni a releváns, hierarchikus reprezentációkat. Ez különösen előnyös a polipok esetében, amelyek megjelenése rendkívül változatos lehet, és nehéz őket egyszerű szabályokkal leírni.
+
+\subsection{A DeepLab modellcsalád és az ASPP modul}
+A Google által fejlesztett DeepLab modellcsalád jelentős előrelépést hozott a szegmentációs feladatokban, elsősorban a "dilated" (vagy atrous) konvolúciók bevezetésével, amelyek lehetővé teszik a receptív mező növelését a felbontás drasztikus csökkentése nélkül. A DeepLabV3+ egyik kulcseleme az Atrous Spatial Pyramid Pooling (ASPP) modul, amely képes a képek különböző léptékű jellemzőit párhuzamosan kinyerni, így hatékonyan kezeli a polipok szélsőséges méretbeli változatosságát. Az ASPP modul több párhuzamos atrous konvolúciós réteget tartalmaz eltérő rátákkal (dilation rates), amelyek kimeneteit összefűzve a hálózat egyszerre látja a finom részleteket és a globális kontextust. A V3+ verzió ezt egy egyszerű, de hatékony dekódoló ággal egészíti ki, amely a felskálázott jellemzőket kombinálja az alacsony szintű élinformációkkal, így pontosabb határokat eredményez, mint elődei.
+
+\subsection{Valós idejű videófeldolgozás Python környezetben}
+Bár a Python a Data Science elsődleges nyelve, a valós idejű, nagy teljesítményű videófeldolgozás során komoly akadályt jelenthet a Global Interpreter Lock (GIL), amely korlátozza a szálak párhuzamos futtatását. A szakirodalom különböző megoldásokat javasol ezen korlátok megkerülésére, a multiprocessing modul használatától kezdve a számításigényes feladatok GPU-ra (CUDA) történő kiszervezéséig. A gyakorlatban a képfeldolgozás (OpenCV) és a neurális hálózat futtatása (PyTorch) C++ alapokon nyugszik, így a Python "csak" a vezérlést végzi ("glue code"). A GIL hatása leginkább a Python-szintű hurkoknál és adatmozgatásoknál jelentkezik, ezért kritikus a vektorizált műveletek (NumPy) használata és az aszinkron I/O műveletek megfelelő szervezése a várakozási idők minimalizálása érdekében.
+
+\section{Alkalmazott eszközök és technológiák}
+
+\subsection{Programozási környezet}
+A fejlesztés során a Python 3.x verziója került kiválasztásra, amely széleskörű könyvtár-támogatottsága miatt ideális környezet a prototípus-fejlesztéshez és a kutatáshoz. A mélytanuló modellek implementálásához a PyTorch keretrendszer szolgált alapul, amely dinamikus számítási gráfjával és intuitív API-jával rugalmas kísérletezést tesz lehetővé. A PyTorch "eager execution" modellje nagyban megkönnyíti a hibakeresést és a modell viselkedésének lépésről-lépésre történő követését, szemben a statikus gráfokat használó rendszerekkel (pl. TensorFlow 1.x). Emellett a kiterjedt közösségi támogatás és a kész, előtanított modellek (torchvision) elérhetősége is mellette szólt.
+
+\subsection{Képfeldolgozó könyvtárak}
+A videófolyamok kezeléséhez és az alapvető képmanipulációs műveletekhez az ipari szabványnak számító OpenCV könyvtár, míg a hatékony mátrixműveletekhez a NumPy került alkalmazásra. Az adatok előkészítése és a modell robusztusságának növelése érdekében az Albumentations könyvtár szolgált, amely gyors és változatos augmentációs technikákat kínál. Az Albumentations kifejezetten a gépi tanulási feladatokra optimalizált, és jelentősen gyorsabb, mint a hagyományos megoldások (pl. PIL), miközben gazdag transzformációs készletet (rugalmas torzítás, színcsatorna manipulációk) biztosít a tanítóadatok dúsításához.
+
+\subsection{Hardveres környezet}
+A projekt során két eltérő hardverkonfiguráció került alkalmazásra: egy nagy teljesítményű munkaállomás a modell tanításához, és egy hordozható számítógép a valós idejű futtatás demonstrálásához.
+
+\subsubsection{Tanító környezet}
+A mélytanuló modell számításigényes tanítási fázisa egy dedikált munkaállomáson zajlott, amely biztosította a szükséges párhuzamosítási kapacitást a gyors konvergenciához.
+\begin{itemize}
+    \item \textbf{GPU:} NVIDIA GeForce RTX széria (CUDA támogatással).
+    \item \textbf{Feladat:} Adat-előfeldolgozás, augmentáció, a DeepLabV3+ hálózat tanítása és validációja.
+\end{itemize}
+A valós idejű videójel fogadásához ebben a környezetben egy speciális, alacsony késleltetésű HDMI capture kártya is beépítésre került, amely biztosította a nyers videóadatok folyamatos áramlását a számítógép felé a kezdeti tesztek során.
+
+\subsubsection{Tesztelési és futtatási környezet}
+A kész szoftver teljesítménytesztelése és a hordozhatóság demonstrálása egy ASUS Zenbook 14 típusú ultrabookon történt. A cél annak igazolása volt, hogy az optimalizált modell (MobileNetV2 backbone) gyengébb hardveren is képes a közel valós idejű működésre.
+\begin{itemize}
+    \item \textbf{Processzor:} AMD Ryzen 7 5825U (8 mag, 16 szál, alapórajel 2.00 GHz, Boost akár 4.5 GHz).
+    \item \textbf{Memória:} 16 GB LPDDR4X (4266 MT/s sebesség).
+    \item \textbf{Grafikus vezérlő:} Integrált AMD Radeon Graphics (megosztott rendszermemóriával).
+    \item \textbf{Tárhely:} 477 GB SSD.
+\end{itemize}
+Az 5. fejezetben bemutatott teljesítménymérések (pl. a ~350 ms-os válaszidő) ezen a konfiguráción születtek, igazolva a rendszer hatékonyságát dedikált videókártya nélküli környezetben is.
+
+\chapter{A szegmentáló modell tervezése és implementációja}
+\textit{Becsült terjedelem: 6-8 oldal}
+
+\section{Adatbázisok és előkészítés}
+
+\subsection{Adatbázisok bemutatása}
+A modell tanításához és validálásához két fő forrásból származó adatbázis került felhasználásra. Az első a nyilvánosan elérhető, standardizált Kvasir-SEG dataset \cite{kvasir_seg}, amely 1000 darab annotált polip képet tartalmaz változatos patológiai esetekkel és hozzájuk tartozó bináris szegmentációs maszkokkal; ez az adatkészlet a polip szegmentálási kutatások egyik leggyakrabban használt benchmarkja. A második forrás a Széchenyi István Egyetem (SZE) kutatócsoportja által gyűjtött SZE Dataset, amely specifikus klinikai körülmények között készült endoszkópos felvételeket tartalmaz. Az SZE Dataset Excel-alapú annotációval rendelkezik, amely minden képhez egyedi páciens-azonosítót (ID), osztálycímkét (CLASS) és minőségi jelölést (QUALITY) rendel. A két adatbázis egyesítése során a Kvasir-SEG képek egyedi azonosítót kaptak (\texttt{kvasir\_} prefix), biztosítva az ütközésmentes páciensazonosítást a későbbi adatfelosztás során.
+
+\subsection{Adattisztítás és annotációs kihívások}
+Az adatok feldolgozása során az egyik legnagyobb kihívást a hibás vagy pontatlan annotációk, valamint a zajos, diagnosztikai szempontból értékelhetetlen képkockák szűrése jelentette. Az SZE Dataset fájlnév-konvenciójában a 6. pozíción álló betű (E vagy R) jelöli a kép minőségét, ami lehetővé tette az automatikus előszűrést. A manuális átvizsgálás során eltávolításra kerültek azok a maszkok, amelyek nem fedték pontosan a léziót, illetve korrigálásra kerültek a székletet vagy buborékokat tévesen polipként jelölő annotációk (fals pozitívok). Az endoszkópos képalkotás további speciális kihívásai -- például a nyálkahártya nedves felületéről visszaverődő fény (speculáris tükröződések) és a széles látószögű lencse által okozott hordótorzítás -- szintén befolyásolhatják a szegmentálás pontosságát, ezért a tanítóhalmaz összeállításakor ezekre az artefaktumokra is kiemelt figyelmet kellett fordítani.
+
+\subsection{Augmentációs stratégiák}
+Mivel az orvosi képalkotó adatbázisok mérete viszonylag korlátozott, a modell általánosító képességének növelése és a túltanulás elkerülése érdekében adat-augmentációs stratégia került alkalmazásra. A tréning adatokra a következő transzformációs lánc (pipeline) vonatkozott: véletlenszerű léptékváltoztatás (\texttt{ExtRandomScale}, 0.5--2.0$\times$ tartomány), véletlenszerű horizontális tükrözés (\texttt{ExtRandomHorizontalFlip}), véletlenszerű kivágás $513 \times 513$ pixeles méretre (\texttt{ExtRandomCrop}), véletlenszerű forgatás (\texttt{ExtRandomRotation}), majd a tenzorrá alakítás (\texttt{ExtToTensor}) és az ImageNet normalizáció (\texttt{ExtNormalize}, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]). A validációs és tesztelési fázisban ezzel szemben kizárólag determinisztikus transzformációk kerültek alkalmazásra: átméretezés 513 pixelre (\texttt{ExtResize}), középre vágás (\texttt{ExtCenterCrop}), tenzorrá alakítás és normalizáció -- augmentáció nélkül. A léptékváltoztatás és a forgatás biztosítja, hogy a hálózat megtanulja felismerni a polipokat különböző méretben és orientációban, míg a tükrözés a szimmetria-invarianciát erősíti.
+
+\section{Modell architektúra}
+
+\subsection{DeepLabV3+ kiválasztásának indoklása}
+A szegmentációs architektúra kiválasztásakor több modell összehasonlítása történt. Az orvosi szegmentálásban korábban domináns U-Net \cite{unet} szimmetrikus kódoló-dekódoló struktúrájával és skip connection megoldásaival statikus orvosi képeken kiválóan teljesít, azonban a kolonoszkópia dinamikus környezetében és a polipok szélsőséges méretbeli változatossága (néhány millimétertől több centiméterig) esetén a hagyományos konvolúciós rétegek fix receptív mezője korlátot jelent. A Google által fejlesztett DeepLab modellcsalád \cite{deeplabv3plus} éppen ezt a többléptékű kontextus-megragadási problémát célozta meg: a DeepLabV1/V2 az atrous (dilatált) konvolúciót és az Atrous Spatial Pyramid Pooling (ASPP) modult vezette be, a DeepLabV3 a globális átlagolást (global average pooling) illesztette az ASPP-hez, míg a DeepLabV3+ egy dekódoló modullal egészítette ki a rendszert, amely a felskálázott szemantikai információt ötvözi a gerinchálózat korábbi rétegeinek nagy felbontású, alacsony szintű jellemzőivel. Ez a kombináció képes visszaállítani a polipok éles határvonalait, ami kritikus a pontos méretmeghatározáshoz. A szakirodalmi benchmark adatok is alátámasztják a választást: a CVC-ClinicDB adatkészleten az U-Net átlagosan $\sim$89--90\% Dice-együtthatót ért el, míg a DeepLabV3+ MobileNetV2 gerinchálózattal 93--96\% Dice értéket produkált \cite{li_deeplabv3plus}.
+
+\subsection{MobileNetV2 backbone előnyei}
+Az alacsony késleltetésű működés követelménye megkövetelte a DeepLabV3+ modell gerinchálózatának (backbone) gondos megválasztását. A robusztus, de számításigényes ResNet vagy Xception helyett a MobileNetV2 \cite{mobilenetv2} került alkalmazásra, amely a mélységi szeparálható konvolúció (depthwise separable convolution) technikáján alapul. Ez a megoldás a standard konvolúciót két lépésre bontja: egy térbeli szűrésre (depthwise) és egy csatorna-kombinációra (pointwise), ami tipikus $3 \times 3$-as kernel esetén 8--9-szeres számítási megtakarítást eredményez. A MobileNetV2 további kulcsinnovációja a fordított reziduális blokk (inverted residual block), amely ``Narrow-Wide-Narrow'' struktúrát alkalmaz: először 1$\times$1 konvolúcióval kiterjeszti a csatornák számát (általában 6-szorosára), majd a kiterjesztett téren végzi a $3 \times 3$-as mélységi konvolúciót, végül visszacsökkenti a dimenziót. A kimeneti bottleneck rétegen lineáris aktiváció kerül alkalmazásra a nem-lineáris aktiváció (ReLU) helyett, ami megőrzi az alacsony dimenziós jellemzők finom információtartalmát. A gyakorlatban ez a kombináció drasztikus különbséget jelent: a MobileNetV2 mindössze 2,1--5,8 millió paraméterrel rendelkezik a ResNet50 $\sim$40--50 millió vagy az Xception $\sim$54,7 millió paraméterével szemben, és GPU-n 40--50 FPS sebességet ér el, míg a ResNet50 csupán $\sim$20--25 FPS-t. A jelen implementációban az output stride értéke 16-ra (\texttt{output\_stride=16}) lett beállítva, ami azt jelenti, hogy a MobileNetV2 utolsó blokkjaiban a stride=2 helyett stride=1 kerül alkalmazásra, és a receptív mező fenntartása atrous konvolúcióval valósul meg.
+
+\subsection{Veszteségfüggvény és optimalizáció}
+A célfüggvény (loss function) megválasztása kulcsfontosságú a konvergencia szempontjából. A feladathoz a \texttt{CrossEntropyLoss} került alkalmazásra, amely a két osztályos (háttér és polip, \texttt{num\_classes=2}) szegmentáláshoz jól illeszkedik: az egyes pixelek valószínűségi eloszlását hasonlítja össze a valódi címkékkel, és hatékonyan bünteti a tévesztéseket mindkét irányban. Az optimalizáláshoz az Adam algoritmus szolgált (\texttt{lr=0.001}), amely adaptív tanulási rátájának köszönhetően gyorsabb konvergenciát biztosít a hagyományos SGD-hez képest. A tanulási ráta finomhangolására a \texttt{ReduceLROnPlateau} ütemező (scheduler) lett beállítva: amennyiben a validációs IoU érték 3 egymást követő epoch során nem javul (\texttt{patience=3}), az ütemező a tanulási rátát tizedére csökkenti (\texttt{factor=0.1}), ezzel segítve a modell finomabb konvergenciáját a tanítás későbbi fázisaiban.
+
+\section{Tanítási és validációs stratégia}
+
+\subsection{Transzfer tanulás}
+A rendelkezésre álló korlátozott mennyiségű orvosi adat miatt a ``nulláról'' történő tanítás helyett a transzfer tanulás (transfer learning) módszere került alkalmazásra. A MobileNetV2 gerinchálózat az ImageNet adatbázison előtanított, majd a PASCAL VOC szegmentációs feladatra továbbtanított súlyokkal lett inicializálva (amit a checkpoint fájlnév \texttt{\_voc\_os16} utótagja is jelez). Az előtanított súlyok biztosítják, hogy a hálózat alacsony szintű rétegei már a tanítás kezdetén is képesek legyenek az alapvető vizuális jellemzők (élek, textúrák, színátmenetek) kinyerésére, ami drasztikusan felgyorsítja a konvergenciát. A finomhangolás (fine-tuning) során a teljes hálózat súlyai módosultak -- a gerinchálózat rétegei nem kerültek befagyasztásra --, lehetővé téve, hogy a modell adaptálódjon az endoszkópos polipképek specifikus jellemzőihez.
+
+\subsection{A StratifiedGroupKFold jelentősége}
+A modell validációja során kiemelt figyelmet kellett fordítani az adatszivárgás (data leakage) elkerülésére, amely akkor léphet fel, ha ugyanazon betegről készült, egymáshoz nagyon hasonló képkockák kerülnek a tanító és a validációs halmazba is. Ennek megelőzésére a standard véletlenszerű szétválasztás helyett a \texttt{StratifiedGroupKFold} módszer került alkalmazásra (\texttt{n\_splits=100}, \texttt{shuffle=True}, \texttt{random\_state=42}). A ``Group'' komponens biztosítja, hogy egy páciens összes képe ugyanabba a halmazba kerüljön (csoportosítás az ID oszlop alapján), míg a ``Stratified'' komponens a CLASS oszlop alapján gondoskodik arról, hogy a polip jelenlétének aránya kiegyensúlyozott maradjon a halmazok között. Az adatfelosztás aránya: 70\% tréning, 15\% validáció, 15\% teszt. Az SZE Dataset felosztásának konkrét eredménye: a tréning halmaz 476 képet (272 páciens), a validációs halmaz 102 képet (83 páciens), a teszthalmaz pedig 495 képet (84 páciens) tartalmaz. A Kvasir-SEG adatkészlet teljes egészében a tréning halmazhoz került hozzáadásra, mivel az nem tartalmaz páciens-szintű azonosítókat, így az adatszivárgás kockázata nem áll fenn.
+
+\subsection{Hiperparaméterek}
+Az optimális hiperparaméterek meghatározása iteratív kísérletezés útján történt, a pontosság és a tanítási idő közötti legjobb kompromisszum megtalálása céljából. A bemeneti képek felbontása $513 \times 513$ pixelben került rögzítésre, összhangban a DeepLabV3+ architektúra alapértelmezett bemeneti méretével. A kötegméret (batch size) 4-re lett beállítva (\texttt{batch\_size=4}), figyelembe véve a rendelkezésre álló GPU memória kapacitását. A tanítás összesen 15 epoch-on (\texttt{num\_epochs=15}) keresztül futott, explicit korai megállási (early stopping) mechanizmus nélkül. Ehelyett a legjobb modell mentése a validációs IoU érték alapján történt: amennyiben egy epoch végén a validációs IoU meghaladta az addigi legjobb értéket, a modell súlyai automatikusan elmentődtek. A végső, legjobb teljesítményt nyújtó modell a 12. epoch-ban érte el a maximális validációs IoU-t, amelynek elnevezése: \texttt{polyp\_trained\_e12\_best\_deeplabv3plus\_mobilenet\_voc\_os16.pth}. A kimeneti osztályok száma 2 (\texttt{num\_classes=2}): háttér és polip, az output stride értéke pedig 16 (\texttt{output\_stride=16}).
+
+\chapter{A szoftveralkalmazás tervezése és fejlesztése}
+\textit{Becsült terjedelem: 6-8 oldal}
+
+\section{Rendszerarchitektúra és követelmények}
+
+\subsection{Funkcionális követelmények}
+A fejlesztett szoftverrel szemben támasztott legfontosabb funkcionális követelmény, hogy képes legyen folyamatosan fogadni a HDMI forrásból érkező videójelet (vagy webkamera képet, videófájlt), és biztosítsa a valós idejű szegmentálás képességét felhasználói beavatkozásra. A rendszernek támogatnia kell a ``Capture \& Analyze'' (Rögzítés és Elemzés) funkciót, amely egy dedikált gomb vagy billentyű (Space) lenyomására a pillanatnyi képkockát kiemeli a videófolyamból, és lefuttatja rajta a szegmentáló és osztályozó algoritmusokat. Az eredményt vizuálisan vissza kell csatolni a felhasználónak: meg kell jeleníteni a hálózat által látott (előfeldolgozott, középre vágott) képet és a szegmentált maszkot az eredeti képre vetítve. A szegmentált polip régió (ROI) továbbá átadható a klasszifikátornak – jelenleg demonstrációs célú \texttt{dummy\_classify} metódus –, amely szövettani becslést végző algoritmusoknak, további elemzésre vagy audit célokra. Emellett a rendszernek naplóznia kell a futási teljesítményadatokat (előfeldolgozás, inferencia, utófeldolgozás ideje) egy CSV fájlba (\texttt{performance\_log.csv}), amely lehetővé teszi a későbbi elemzést és a rendszer teljesítményének nyomon követését.
+
+\subsection{Nem-funkcionális követelmények}
+Mivel a rendszer potenciálisan orvosi beavatkozások során kerülne alkalmazásra, a nem-funkcionális követelmények közül a stabilitás és a megbízhatóság élvez prioritást: a szoftver nem fagyhat le és nem omolhat össze működés közben, különösen a nagy számításigényű inferencia alatt. Ennek érdekében a felhasználói felületet (GUI) kezelő szálnak el kell különülnie a videófeldolgozó és az elemző szálaktól – a \texttt{VideoCaptureThread} daemon szálon fut, ahol folyamatosan olvassa a forrást, míg a főszál kezeli a GUI-t és az igény szerinti elemzést. További követelmény a modularitás: a \texttt{MedicalAnalyzer} osztály cseréjével vagy frissítésével a keretrendszer újraírása nélkül lehessen újabb, pontosabb modelleket integrálni. A szoftvernek hardver-függetlennek kell lennie, azaz képesnek kell lennie futni CPU-n és GPU-n is, automatikusan detektálva a rendelkezésre álló erőforrásokat (\texttt{torch.device('cuda' if torch.cuda.is\_available() else 'cpu')}).
+
+\subsection{Heterogén keretrendszerek integrációja}
+A kutatás során felmerült az a kiemelt architekturális igény, hogy a rendszer ne csupán egyetlen mélytanulási keretrendszerhez (pl. PyTorch) legyen kötve, hanem képes legyen heterogén környezetben működni. Bár a szegmentációs feladatot PyTorch alapú DeepLabV3+ és U-Net modellek végzik, a szoftvert úgy kellett kialakítani, hogy zökkenőmentesen fogadhasson TensorFlow (Keras) alapú klasszifikátor modelleket is. Ez a megközelítés maximalizálja a rendszer rugalmasságát, hiszen lehetővé teszi, hogy külső kutatócsoportok által – akár eltérő keretrendszerben – fejlesztett szövettani osztályozó hálózatokat (pl. egy TensorFlow-ban tanított ResNet50V2) utólagosan, a kód minimális módosításával csatlakoztassunk. A két eltérő keretrendszer egyidejű memóriában tartása komoly kihívást jelent a korlátos GPU VRAM (Video RAM) miatt. Ennek kiküszöbölésére a TensorFlow futtatását a tervezés során szándékosan a központi processzorra (CPU) korlátoztuk (\texttt{tf.config.set\_visible\_devices([], 'GPU')}). Mivel a klasszifikáció csupán egy kisméretű (jellemzően $512 \times 512$ pixeles), egyszeri képkivágáson fut le gombnyomásra, a CPU-n történő végrehajtás nem okoz észrevehető teljesítménycsökkenést, cserébe garantálja, hogy a GPU memóriája kizárólag a nagy erőforrás-igényű PyTorch szegmentáció számára maradjon fenntartva.
+
+\subsection{Adatfolyam diagram}
+A rendszer működésének átláthatósága érdekében elkészült az adatfolyam (Data Flow) diagram, amely vizuálisan ábrázolja az információ útját a fizikai bemenettől a megjelenítőig. Az ábra részletesen bemutatja, hogyan kerül a nyers frame a capture kártyáról (vagy videófájlból, szimulációs képmappából) a \texttt{VideoCaptureThread} pufferébe, onnan a GUI frissítési ciklusába élő képként. Elemzés kérésekor a frame a \texttt{MedicalAnalyzer} modulba kerül, ahol átesik az előfeldolgozáson (BGR→RGB konverzió, PIL Image, átméretezés $513 \times 513$-ra, középre vágás, ImageNet normalizáció), majd a GPU-ra kerül inferenciára. A kapott valószínűségi térképet (probability map) a rendszer \texttt{argmax} után bináris maszkká alakítja, denormalizálja a bemeneti tenzort a vizualizációhoz, majd a polip maszk alapján az eredeti kép tartalmát megjeleníti (háttér fekete). A végső megjelenítés előtt a klasszifikátor (jelenleg \texttt{dummy\_classify}) predikciót ad, amelyet a GUI szövegesen is megjelenít a három panel mellett.
+
+\section{Implementációs részletek}
+
+\subsection{Videó rögzítő modul}
+A videófolyam zökkenőmentes kezelésére egy dedikált, aszinkron működésű rögzítő osztály (\texttt{VideoCaptureThread}) került implementálásra az OpenCV \texttt{VideoCapture} moduljára alapozva. A frame-eldobások és a GUI szaggatásának elkerülése érdekében a rögzítés külön szálon (daemon thread) fut, amely folyamatosan olvassa a hardveres puffert, és mindig csak a legutolsó érvényes képkockát tárolja el egy \texttt{threading.Lock} által védett változóban. A \texttt{read()} metódus lock-kal védett másolatot ad vissza, így a fő alkalmazás (App) mindig a legfrissebb elérhető adatot kapja meg várakozás nélkül (non-blocking read), miközben a capture szál háttérben tovább olvas. Videófájl módban a \texttt{set\_position(percent)} lehetővé teszi a pozíció ugrást (slider), lock-kal védve a seek műveletet. A modul támogatja a szimulációs módot is: fizikai kamera hiányában az \texttt{images/} mappából tölt be véletlenszerű tesztképeket, szűrve a releváns páciens azonosítókra (\texttt{allowed\_ids}, pl. PI009, PI015, …), 2 másodpercenként váltva – lehetővé téve a fejlesztést klinikai környezet nélkül is.
+
+\subsection{Inferáló motor}
+A mélytanuló modell futtatásáért felelős inferáló motor (\texttt{MedicalAnalyzer}) optimalizálása során a PyTorch \texttt{eval()} módja és a \texttt{torch.no\_grad()} kontextus került alkalmazásra a felesleges gradiens-számítások és a számítási gráf építésének kikapcsolására, ami jelentősen csökkenti a memóriaigényt és gyorsítja a futást. A bemeneti képek előkészítése (preprocessing) pontosan követi a tanítás során használt lépéseket: a \texttt{utils.ext\_transforms} modul \texttt{ExtResize(513)}, \texttt{ExtCenterCrop(513)}, \texttt{ExtToTensor} és \texttt{ExtNormalize} (ImageNet mean/std) transzformációit alkalmazza, biztosítva a konzisztens eredményeket. A kimeneti maszkok vizualizációjához a rendszer inverz transzformációt (denormalizáció) végez: a bemeneti tenzort (C, H, W) visszaalakítja NumPy tömbökké, transzponálja (H, W, C)-re, majd visszaállítja az eredeti színeket a \texttt{std * tensor + mean} képlettel és \texttt{np.clip}-pel. A polip maszk alapján az eredeti kép tartalma megjelenik, a háttér fekete marad – alpha blending helyett egyszerű maszkolás, mivel a polip textúrája és felülete látható maradjon.
+
+\subsection{Konfidencia-alapú döntéstámogatás és a klasszifikátor interfész}
+A rendszer egyik kulcsfontosságú eleme a modularitás jegyében kialakított klasszifikációs logika és a konfidencia-alapú döntéstámogatás. Amikor a szegmentáló modell polipot detektál (a maszk nem üres), a rendszer egy \texttt{\_extract\_roi} metódus segítségével meghatározza a polipot befoglaló legkisebb téglalapot (bounding box), majd ezt a képrészletet (Region of Interest) kivágja, átméretezi és átadja a másodlagos, TensorFlow alapú osztályozó hálózatnak. Jelen implementációban egy bináris klasszifikációra betanított ResNet50V2 hálózat végzi a szövettani besorolást. A klasszifikátor kimenete egyetlen sigmoid neuron, amely a malignitás (rosszindulatúság) valószínűségét adja meg: $0,5$ feletti érték esetén a képletet \textit{Malignant (JNET 2a/2b/3)} kategóriába, alatta pedig \textit{Benign (JNET 1)} kategóriába sorolja a rendszer. 
+
+A döntéstámogatás megbízhatóságának növelése érdekében a szoftver két különböző konfidencia-értéket is kiszámít és megjelenít az orvos számára:
+\begin{itemize}
+    \item \textbf{Szegmentációs konfidencia:} A hálózat (DeepLabV3+ esetén softmax, U-Net esetén sigmoid) nyers kimeneti valószínűségi térképéből (probability map) számítódik. A rendszer veszi a bináris maszkon belül eső (polipként detektált) pixelek valószínűségi értékeinek átlagát. Ez megmutatja, hogy a modell átlagosan mennyire "biztos" abban, hogy a kijelölt terület valóban polip (pl. 78\% vagy 95\%).
+    \item \textbf{Klasszifikációs konfidencia:} A TensorFlow modell sigmoid kimenetéből származó valószínűség, amely kifejezi az adott szövettani osztályba (Benign vagy Malignant) tartozás bizonyosságát.
+\end{itemize}
+Ezek a metrikák kritikus fontosságúak a klinikai gyakorlatban: egy alacsony szegmentációs konfidencia (pl. 55\%) vizuális fals pozitív (pl. fénybecsillanás vagy székletmaradvány) gyanúját keltheti, ami felülbírálatra ösztönzi a vizsgáló orvost.
+
+\section{Felhasználói felület terve}
+
+\subsection{Orvosi felhasználói élmény}
+A felhasználói felület tervezésekor az orvosi környezet sajátosságai kerültek előtérbe: a szoftvernek a háttérben kell maradnia, és csak akkor szabad vizuális ingert adnia, ha az valóban szükséges – ne vonja el a figyelmet a műtétről vagy a vizsgálat biztonságos lebonyolításáról. A zavaró tényezők minimalizálása érdekében sötét téma (dark mode, \texttt{\#2c3e50}, \texttt{\#34495e}) került alkalmazásra, ami csökkenti a szem fáradását a gyakran sötétített endoszkópos vizsgállókban. A kezelőfelület minimalista, a gombok nagy méretűek és jól elkülönülnek, támogatva az érintőképernyős használatot is. A ``Capture \& Analyze'' funkció a Space billentyűre is map-elve van, ami lehetővé teszi, hogy az orvos egy lábpedál segítségével, kézhasználat nélkül indítsa el az elemzést munka közben.
+
+\subsection{Vizualizációs megoldások}
+A képernyő elrendezése három fő panelre oszlik, segítve az orvost a döntéshozatalban. A bal oldali panelen (``Live Feed'') látható az élő, módosítatlan videókép, 400 px magasságúra skálázva. A középső panel (``Network Input (Center Crop)'') mutatja a neurális hálózat bemenetét – a középre vágott, $513 \times 513$-ra méretezett képet –, ami segít ellenőrizni, hogy a polip a látótérben van-e. A jobb oldali panel (``Polyp Segmentation'') jeleníti meg a szegmentált eredményt: a polip maszk alapján az eredeti kép tartalma megjelenik, a háttér fekete marad, így a polip textúrája és felülete látható marad. A rendszer közvetlenül a szegmentált kép alatt nagy méretű betűkkel szövegesen is megjeleníti a szegmentációs konfidenciát, a klasszifikációs eredményt és annak valószínűségét (pl. \textit{"Szegm.: 88.5\% | Benign (JNET 1) (92.1\%)"}), azonnali és jól olvasható döntéstámogatást nyújtva ezzel.
+
+\subsection{Adatgyűjtés és automatikus mentés}
+Egy orvosi döntéstámogató rendszer esetében kiemelt jelentőséggel bír a vizsgálatok dokumentálhatósága, mind a későbbi orvosi audit, mind az utólagos modell-továbbfejlesztés (adatgyűjtés) céljából. Ennek kiszolgálására az alkalmazás egy robusztus mentési funkcionalitással bővült, amely a GUI-n keresztül szabályozható. A felhasználó két mód közül választhat:
+\begin{itemize}
+    \item \textbf{Manuális mentés:} Ez az alapértelmezett viselkedés. A felhasználó a "Capture \& Analyze" lenyomásakor csak a képernyőn látja az eredményt. Ha a talált elváltozás diagnosztikai vagy kutatási szempontból értékes, a "Mentés" gombra kattintva rögzítheti azt.
+    \item \textbf{Auto mentés:} Ebben a módban minden egyes alkalommal, amikor az orvos (a gép vagy a lábpedál segítségével) elemzést indít, a rendszer a háttérben automatikusan és aszinkron módon elmenti az eredményeket, anélkül, hogy a vizsgálat menetét megakasztaná.
+\end{itemize}
+A mentési folyamat (\texttt{\_save\_results}) másodperc-pontosságú időbélyegekkel (\texttt{YYYYMMDD\_HHMMSS}) dolgozik. Minden mentési esemény során egy közös mappába (\texttt{saved\_results}) generálódik három képfájl: az eredeti videóképkocka, a hálózatnak beadott középre vágott bemenet, valamint a polip-maszkolt eredmény. Technikai szempontból fontos részlet, hogy a Windows operációs rendszeren az OpenCV \texttt{cv2.imwrite} függvénye nem támogatja a speciális karaktereket (pl. magyar ékezetek) tartalmazó fájlútvonalakat. Ezt a problémát a memória-pufferen keresztüli kódolással (\texttt{cv2.imencode}) és natív fájlba írással hidaltuk át. A képek mellé a rendszer egy strukturált JSON formátumú metaadat fájlt (\texttt{metadata.json}) is elhelyez, amely eltárolja az időbélyeget, a klasszifikátor kimeneti osztályát, a szegmentációs konfidenciát és az osztályozási valószínűséget. Ez az adatstruktúra ideális alapot biztosít a későbbi statisztikai elemzésekhez és a gépi tanulási modellek iteratív újratanításához.
+
+\chapter{Eredmények és kiértékelés}
+\textit{Becsült terjedelem: 4-5 oldal}
+
+\section{A szegmentáló modell teljesítménye}
+
+\subsection{Kvantitatív eredmények}
+A kifejlesztett DeepLabV3+ alapú szegmentáló modell pontossága az SZE teszthalmazon végzett független mérésekkel került igazolásra. A modell kiértékelésére a legjobb validációs teljesítményt nyújtó checkpoint (epoch 38) került kiválasztásra, amely a validációs halmazon 84,49\% átlagos IoU-t ért el. A teszthalmazon végzett mérések megerősítették a modell robusztusságát: a rendszer 83,31\% átlagos IoU és 90,40\% átlagos Dice score értéket produkált (lásd \ref{tab:kvant_eredmenyek_epoch38}. táblázat).
+
+A 90,40\%-os Dice score érték a szakirodalomban is kiváló szegmentációs teljesítménynek számít, különösen figyelembe véve, hogy a MobileNetV2 egy erőforrás-takarékos, valós idejű futtatásra optimalizált gerinchálózat. Az eredmények azt mutatják, hogy a modell nemcsak a polipok jelenlétét detektálja megbízhatóan, hanem azok alakját és kiterjedését is nagy pontossággal határolja körül. A teszt és a validációs eredmények közötti minimális eltérés ($\sim$1,18\% IoU csökkenés) arra utal, hogy a modell jól általánosít, és nem történt jelentős túltanulás (overfitting) a tanító adatokon. Ez a stabilitás kritikus fontosságú a klinikai alkalmazhatóság szempontjából, ahol a rendszernek ismeretlen, változatos endoszkópos felvételeken is megbízhatóan kell teljesítenie.
+
+\begin{table}[h]
+    \centering
+    \caption{A kiválasztott szegmentáló modell kvantitatív eredményei (SZE validáció és teszt halmaz).}
+    \label{tab:kvant_eredmenyek_epoch38}
+    \begin{tabular}{c c c c}
+        \hline
+        Epoch & Val IoU [\%] & Test IoU [\%] & Test Dice [\%] \\
+        \hline
+        38 & 84,49 & 83,31 & 90,40 \\
+        \hline
+    \end{tabular}
+\end{table}
+
+\subsection{Kvalitatív elemzés}
+A számszerű eredmények mellett a vizuális kiértékelés is megerősíti a modell hatékonyságát. A sikeres szegmentálásoknál megfigyelhető, hogy a hálózat pontosan követi a polipok szabálytalan kontúrjait, és még a nyálkahártyával színben alig eltérő, lapos (sessile) elváltozásokat is képes elkülöníteni a környezettől. A DeepLabV3+ architektúra ASPP moduljának köszönhetően a modell a különböző méretű polipokat -- az apró, néhány milliméteres képletektől a nagyobb adenómákig -- egyaránt felismeri.
+
+Ugyanakkor a tesztelés során azonosításra kerültek tipikus hibaforrások is. A leggyakoribb tévesztést a speculáris tükröződések (fénybecsillanások) és a székletmaradványok vagy buborékok okozzák, amelyeket a modell esetenként tévesen polipként (fals pozitív) jelöl meg. Szintén kihívást jelentenek a kép szélein elhelyezkedő, részlegesen látható polipok, illetve a rossz megvilágítású vagy életlen (motion blur) képkockák. Ezek a hibák azonban jellemzően lokálisak és rövid ideig tartanak, így a videófolyam folyamatos elemzése során a rendszer összességében stabil detektálást nyújt.
+
+\section{Rendszerteljesítmény mérése}
+
+\subsection{Megjelenítési sebesség és igény szerinti elemzési idő}
+A rendszer teljesítményét két szempont szerint értékeltem: a folyamatos videófolyam megjelenítési sebessége (FPS) és a felhasználói beavatkozásra (gombnyomás) történő elemzés válaszideje (latency).
+
+Az élő videókép megjelenítését a szoftver dedikált szálon (thread) végzi, amely leválasztja a GUI frissítését a capture folyamatról. A mérések során a rendszer stabilan tartotta a 30 FPS megjelenítési sebességet, biztosítva a folyamatos, akadásmentes vizuális visszacsatolást az orvos számára.
+
+A gombnyomásra történő elemzés ("Capture \& Analyze") teljes körű válaszidejét 120 mérési pont átlagolásával határoztam meg. A mérések magukban foglalták az előfeldolgozást (képkivágás, tenzorrá alakítás), a neurális háló inferenciáját és az utófeldolgozást (maszk színezése, megjelenítése). Az átlagos teljes válaszidő \textbf{351,36 ms} (szórás: $\pm$51,01 ms) volt. Ennek komponensei az alábbiak szerint oszlanak meg:
+\begin{itemize}
+    \item \textbf{Előfeldolgozás:} átlagosan 20,00 ms.
+    \item \textbf{Inferencia (DeepLabV3+):} átlagosan 307,71 ms.
+    \item \textbf{Utófeldolgozás és megjelenítés:} átlagosan 23,65 ms.
+\end{itemize}
+
+Bár az eredmény meghaladja a szigorúan vett valós idejű (real-time) videófeldolgozás 33-40 ms-os keretidejét, a rendszer tervezett felhasználási módjában -- ahol az elemzés igény szerint, statikus pillanatfelvételen történik -- ez az érték elfogadható. A felhasználó számára a gombnyomás és az eredmény megjelenése közötti ~0,35 másodperces késleltetés szinte azonnalinak érződik, és nem akadályozza a klinikai döntéshozatalt. A futásidő legnagyobb részét (~87\%) az inferencia teszi ki, ami erősebb dedikált GPU alkalmazásával vagy a modell további optimalizálásával (pl. TensorRT, kvantálás) jelentősen csökkenthető lenne.
+
+\subsection{Teljes késleltetés és erőforrás-használat}
+A rendszer stabilitását igazolja, hogy a memóriahasználat a hosszú távú futtatás során is konzisztens maradt, memória-szivárgás nem lépett fel. A GPU memória (VRAM) kihasználtsága az inferencia alatt érte el a csúcsot, de a MobileNetV2 alacsony paraméterszáma miatt ez nem jelentett szűk keresztmetszetet még a korlátozottabb erőforrásokkal rendelkező tesztkörnyezetben sem.
+
+\section{Diszkusszió}
+
+\subsection{A gombnyomásra történő elemzés korlátai}
+Az eredmények elemzése során a gombnyomásra történő elemzés működési módjának sajátos korlátai váltak nyilvánvalóvá. Mivel a szegmentálás és a klasszifikáció nem minden képkockán, hanem csak a felhasználó által kiválasztott pillanatban fut, a rendszer nem nyújt folyamatos, képkockánkénti figyelmeztetést; a polip detektálása tehát az orvos döntésén múlik, mikor nyomja meg a gombot. Emellett a nagyfelbontású bemenet előfeldolgozása (középre vágás, átméretezés) és a CPU--GPU adatátvitel továbbra is jelentős késleltetési tényező maradhat, különösen gyengébb hardveren. A Python interpreter és a GIL hatása egyetlen, igény szerinti inferencia esetén kevésbé kritikus, mint folyamatos feldolgozásnál, de a GUI szál és az inferencia szinkronizálása további optimalizációs lehetőséget jelent a jövőben.
+
+\subsection{Illeszthetőség a munkafolyamatba}
+A technikai paramétereken túl vizsgálat tárgyát képezte a rendszer illeszthetősége a tényleges klinikai munkafolyamatba, figyelembe véve az orvosok visszajelzéseit a kezelőfelületről és a vizualizációról. A diszkusszió kitér arra, hogy a rendszer jelenlegi formájában mennyire képes támogatni a döntéshozatalt anélkül, hogy túlzott kognitív terhelést jelentene vagy megzavarná a rutinszerű vizsgálatot. A tapasztalatok azt mutatják, hogy az igény szerinti (on-demand) elemzés jól illeszkedik a gasztroenterológiai gyakorlathoz. A kolonoszkópia során az orvos gyanús elváltozás észlelésekor ösztönösen lassít vagy megállítja a képet (freeze) a tüzetesebb vizsgálathoz – fotózáskor, dokumentáláskor ugyanúgy megáll a kép. A gombnyomásos logika tehát természetes módon illeszkedik ehhez a meglévő viselkedéshez: a ``Capture \& Analyze'' funkció ezt a szünetet használja ki, így a ~350 ms-os válaszidő nem töri meg a vizsgálat ritmusát, ellenben megerősítést (másodvéleményt) ad a gyanúról. Ez a megközelítés elkerüli a folyamatos valós idejű rendszereknél gyakori fals pozitív villogást, ami elvonhatná a figyelmet a biztonságos eszközvezetéstől.
+
+\chapter{Összefoglalás és jövőbeli tervek}
+\textit{Becsült terjedelem: 1-2 oldal}
+
+\section{Az elért eredmények összefoglalása}
+A dolgozat keretében sikeresen megtervezésre és implementálásra került egy DeepLabV3+ alapú, valós idejű polip szegmentáló keretrendszer, amely hatékonyan integrálja a modern mélytanulási módszereket a klinikai videófeldolgozásba. A létrehozott moduláris Python alkalmazás nemcsak a polipok pontos lokalizációjára képes (83,31\% teszt IoU, 90,40\% Dice score az SZE teszthalmazon), hanem működő interfészt biztosít a további osztályozási feladatokhoz is – ezzel teljesítve a kitűzött célokat. A rendszer a tesztek során 30 FPS megjelenítési sebességet és ~350 ms átlagos válaszidőt ért el integrált grafikus kártyával (ASUS Zenbook 14), bizonyítva, hogy a MobileNetV2 gerinchálózat alkalmas a kompromisszummentes, valós idejű döntéstámogatásra még korlátozottabb erőforrásokkal rendelkező hardveren is.
+
+\section{A fejlesztés korlátai}
+A sikerek ellenére a jelenlegi rendszernek vannak technikai korlátai, elsősorban a maximális felbontás és a feldolgozási sebesség közötti kompromisszumkényszer tekintetében. A Python környezet teljesítménybeli határai és a hardveres erőforrások végessége miatt 4K felbontás esetén még nem garantálható a stabil valós idejű működés, ami további optimalizációt tesz szükségessé. Emellett a jelenlegi dummy osztályozó modul csupán a koncepciót demonstrálja; a klinikai alkalmazhatósághoz elengedhetetlen egy valós patológiai adatokon tanított klasszifikációs hálózat integrálása. A középre vágás 513×513 pixeles bemenetre részletesebb kontextus elvesztését eredményezhet nagyfelbontású forrásnál.
+
+\section{Jövőbeli fejlesztési irányok}
+
+\subsection{Hardveres optimalizáció}
+A rendszer teljesítményének drasztikus növelése érdekében a jövőben érdemes megvizsgálni a modell TensorRT-vel történő optimalizálását, vagy a kritikus kódrészek C++ nyelven történő újraírását. Hosszabb távon a rendszer beágyazott eszközökre (pl. NVIDIA Jetson) vagy FPGA alapú hardvergyorsítókra történő portolása tehetné lehetővé a kompakt, hordozható orvosi eszközként való alkalmazást, amely akár közvetlenül az endoszkópos toronyhoz is csatlakoztatható lenne – minimalizálva a külső számítógép függőségét a vizsgálóteremben.
+
+\subsection{Temporális utófeldolgozás}
+A detektálási pontosság és a vizuális stabilitás javítása érdekében tervezem temporális (időbeli) utófeldolgozási algoritmusok beépítését. A maszkok egymást követő képkockákon történő simítása vagy átlagolása segíthet kiküszöbölni a detektálás vibrálását, és konziszensebb megjelenítést biztosíthat az orvos számára. Ez különösen a videófolyamaton történő folyamatos elemzés esetén lenne kritikus fejlesztés – jelenleg az igény szerinti módban kevésbé sürgős.
+
+\subsection{További integráció}
+A keretrendszer klinikai hasznosíthatóságának növelése érdekében elengedhetetlen a kórházi információs rendszerekkel (HIS/PACS) való integráció megteremtése. Ez lehetővé tenné, hogy a rendszer által készített pillanatfelvételek és leletek automatikusan a beteg elektronikus kórtörténetébe kerüljenek, tovább egyszerűsítve az adminisztrációt és a dokumentációt. A DICOM szabvány támogatása biztosítaná a kompatibilitást a meglévő orvosi képalkotó infrastruktúrával.
+
+\printbibliography
+
+\appendix
+
+\chapter{A kolorektális polip szegmentáló modell szoftveres fejlesztésének dokumentációja}
+
+\section{Cél és kontextus}
+
+\subsection{A dokumentáció célja}
+Jelen melléklet a diplomamunkában bemutatott kolorektális polip szegmentáló rendszer (DeepLabV3+ architektúra) szoftveres megvalósítását és fejlesztési lépéseit dokumentálja. Célja, hogy bemutassa a \texttt{colon\_short\_szd.ipynb} Jupyter Notebook felépítését szoftvermérnöki és adatkutatói (Data Science/ML) szemszögből, biztosítva a kutatás átláthatóságát és a kód reprodukálhatóságát.
+
+\subsection{Kapcsolat a dolgozattal}
+Míg a dolgozat 3. fejezete (Módszertan) a modell elméleti hátterét, az architektúra választásának indoklását és a képfeldolgozási elveket tárgyalja, ez a melléklet szigorúan az implementációra fókuszál: hogyan történt a PyTorch osztályok példányosítása, az adathalmazok betöltése, valamint a betanítás és a kiértékelés szoftveres megvalósítása.
+
+\subsection{Felhasználási szcenárió}
+A szoftver elsődlegesen offline modelltanításra és validációra készült (Jupyter környezetben). A kimenetként kapott betanított modell súlyok (\texttt{.pth} fájl) a későbbiekben felhasználhatók önálló inferencia szkriptekben (pl. \texttt{live\_capture\_app.py}), valós idejű vagy rögzített endoszkópos videók/képek feldolgozására.
+
+\section{Fejlesztési környezet és függőségek}
+
+A projekt fejlesztése és futtatása lokális, illetve felhőalapú GPU környezetben történt a megfelelő teljesítmény elérése érdekében.
+
+\subsection{Hardverkörnyezet}
+\begin{itemize}
+    \item \textbf{Számítási egység:} Nvidia GPU (pl. RTX széria vagy Google Colab T4) a gyorsított tenzorműveletekhez. Egy epoch tanítási ideje a batch mérettől és a GPU teljesítményétől függően változik.
+    \item \textbf{Rendszermemória:} Minimum 16 GB RAM javasolt a képek betöltéséhez és az adat-augmentációhoz.
+\end{itemize}
+
+\subsection{Szoftverkörnyezet és verziók}
+A fejlesztés Python nyelven, Jupyter Notebook / Cursor / VSCode környezetben zajlott. A legkritikusabb függőségek a következők:
+\begin{itemize}
+    \item \textbf{Operációs rendszer:} Windows / Linux (WSL)
+    \item \textbf{Python verzió:} 3.10+
+    \item \textbf{PyTorch:} \texttt{torch} és \texttt{torchvision} (CUDA támogatással)
+    \item \textbf{Egyéb elengedhetetlen könyvtárak:} \texttt{numpy}, \texttt{matplotlib}, \texttt{Pillow}, \texttt{scikit-learn}
+\end{itemize}
+
+\subsection{Környezet felállítása}
+A projekt egy dedikált virtuális környezetben (\texttt{venv}) futtatható. A telepítés a következőképpen történik:
+\begin{verbatim}
+python -m venv venv
+# Windows esetén:
+venv\Scripts\activate
+# Linux/Mac esetén:
+source venv/bin/activate
+
+pip install -r requirements.txt
+\end{verbatim}
+
+\section{Rendszerarchitektúra magas szinten}
+
+A rendszer adatfolyama moduláris felépítésű, követve a gépi tanulási projektek klasszikus életciklusát:
+\begin{enumerate}
+    \item \textbf{Adatbetöltés és -felosztás:} Képek és maszkok szinkronizált betöltése, majd felosztása (train/val/test).
+    \item \textbf{Adat- és maszkolás előfeldolgozás:} Képek transzformációja (augmentáció) Pytorch Dataset osztályok segítségével.
+    \item \textbf{Modell definíció:} A \texttt{torchvision} könyvtár DeepLabV3+ modelljének inicializálása MobileNetV2 encoderrel.
+    \item \textbf{Tanítási ciklus:} Mini-batch alapú iteráció, veszteségfüggvény számítása, backpropagation.
+    \item \textbf{Kiértékelés és mentés:} Validációs metrikák (IoU, Dice) számítása, a legjobb modellállapot (checkpoint) automatikus mentése.
+\end{enumerate}
+
+\textit{(Az adatfolyam vizuális ábrázolását a dolgozat vonatkozó fejezete tartalmazza.)}
+
+\section{Adatkezelés és előfeldolgozás}
+
+\subsection{Címtárszerkezet}
+A kód az alábbi dedikált mappastruktúrát várja az adatbázisokhoz (Kvasir-SEG és a SZE Dataset beolvasztása után):
+
+\begin{verbatim}
+projekt_gyökér/
+├── images/
+│   ├── polyp_1.jpg
+│   ├── polyp_2.jpg
+│   └── ...
+├── masks/
+│   ├── polyp_1.jpg (vagy .png)
+│   ├── polyp_2.jpg
+│   └── ...
+└── checkpoints/
+\end{verbatim}
+A betöltő szkript párosítja az azonos nevű képeket és maszkokat.
+
+\subsection{PyTorch Dataset és Dataloader}
+A képek beolvasása egy egyedi, \texttt{torch.utils.data.Dataset} osztályból származtatott implementáción keresztül történik. 
+\begin{itemize}
+    \item A \textbf{DataLoader} felel a képek kötegeléséért (batching), jellemzően \texttt{batch\_size=4} értékkel, a GPU memória korlátai miatt.
+    \item A betanító DataLoader esetében a \texttt{shuffle=True} beállítás biztosítja az adatok véletlenszerűsítését.
+\end{itemize}
+
+\subsection{Transzformációk}
+Az augmentáció a \texttt{torchvision.transforms} segítségével valósul meg a betanítási fázisban:
+\begin{itemize}
+    \item \textbf{RandomScale / Resize:} A képek méretének véletlenszerű változtatása.
+    \item \textbf{RandomCrop (513x513):} A hálózat rögzített bemeneti méretének biztosítása.
+    \item \textbf{RandomHorizontalFlip / RandomRotation:} Forgatások és tükrözések a modell robusztusságának növelésére.
+    \item \textbf{Normalize:} Az ImageNet statisztikáinak (mean, std) megfelelő normalizáció, amely kritikus a transzfer tanulás (pretrained súlyok) sikerességéhez.
+\end{itemize}
+
+\section{Modellkomponens}
+
+A rendszer központi eleme a szegmentáló hálózat, amelynek inicializálása a \texttt{torchvision} modulból történik.
+
+\subsection{Inicializálás és architektúra}
+A kód a \texttt{torchvision.models.segmentation.deeplabv3\_mobilenet\_v3\_large} (vagy a korábbi V2-es alapú) implementációt hívja meg.
+\begin{itemize}
+    \item \textbf{Pretrained súlyok:} \texttt{weights='DEFAULT'} (COCO/VOC alapú előtanítás).
+    \item \textbf{Kimeneti réteg (Classifier):} Mivel a feladat bináris szegmentálás (háttér vs. polip), az utolsó konvolúciós réteget a kód lecseréli, hogy pontosan \texttt{num\_classes=2} kimeneti csatornája legyen.
+\end{itemize}
+
+\subsection{Veszteségfüggvény és Optimalizáló}
+\begin{itemize}
+    \item \textbf{Veszteségfüggvény (Loss):} \texttt{nn.CrossEntropyLoss()}, amely pixel-szintű többosztályos (itt 2 osztályos) klasszifikációra optimalizál.
+    \item \textbf{Optimalizáló algoritmus:} \texttt{torch.optim.Adam} inicializálva \texttt{lr=0.001} (1e-3) tanulási rátával.
+    \item \textbf{LR Scheduler:} \texttt{ReduceLROnPlateau} osztály, amely automatikusan csökkenti a tanulási rátát (pl. \texttt{factor=0.1}), ha a validációs IoU nem javul meghatározott számú (patience) epoch után.
+\end{itemize}
+
+\section{Tanítási és validációs folyamat}
+
+A tanítás logikája egy kifejezett tréning ciklusba van szervezve.
+
+\subsection{Tanító ciklus}
+Minden epochban a kód végigiterál a betanító adathalmazon:
+\begin{enumerate}
+    \item Az adatok GPU-ra másolása (\texttt{.to(device)}).
+    \item Előrehaladás (forward pass): \texttt{outputs = model(images)}.
+    \item Veszteség számítása a maszkokhoz viszonyítva.
+    \item Visszaterjesztés (backward pass): \texttt{loss.backward()}.
+    \item Súlyok frissítése: \texttt{optimizer.step()}, és a gradiensek nullázása: \texttt{optimizer.zero\_grad()}.
+\end{enumerate}
+
+\subsection{Validáció és korai megállás}
+Minden tanítási epoch végén a hálózat \texttt{model.eval()} módba kapcsol, és lefut a validációs adathalmazon.
+\begin{itemize}
+    \item \textbf{Metrikák:} Dice együttható és Intersection over Union (IoU) számítása történik pixel-szinten.
+    \item \textbf{Early Stopping:} A kód figyeli a validációs IoU-t. Ha bizonyos számú epochon keresztül (pl. \texttt{patience=7}) nincs javulás, a tanítás korábban leáll, megelőzve a túltanulást (overfitting).
+    \item \textbf{Naplózás (Logging):} A metrikák (loss, lr, IoU) historikus adatai memóriában (szótárként) tárolódnak, majd a futás végén kirajzolódnak a matplotlib segítségével.
+\end{itemize}
+
+\section{Eredmények reprodukálhatósága}
+
+A gépi tanulási modellek megbízhatóságának alapja a reprodukálhatóság. Ennek érdekében a kód az alábbi elveket követi:
+
+\subsection{Seed beállítások}
+A futtatás elején egy központi függvény beállítja a determinisztikus generátorokat:
+\begin{verbatim}
+import torch
+import numpy as np
+import random
+
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    # CUDNN backend determinizmus beállítása (opcionális, de ajánlott)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+set_seed(42)
+\end{verbatim}
+
+\subsection{Hiperparaméter konfiguráció}
+A végső betanított modellhez tartozó főbb hiperparaméterek (melyekkel az eredmények reprodukálhatók):
+\begin{itemize}
+    \item \textbf{Batch size:} 4
+    \item \textbf{Max Epochs:} 50 (Early stoppinggal megállhat hamarabb is, pl. 15-20 körül)
+    \item \textbf{Kezdeti LR:} 0.001
+    \item \textbf{Optimizer:} Adam
+    \item \textbf{Kép bemeneti méret:} 513x513
+\end{itemize}
+
+\section{Kimenetek és használat}
+
+\subsection{Checkpoint kezelés}
+A kód csak a legjobb modellt (best IoU) menti le a lemeze: \texttt{checkpoints/best\_model\_epoch\_\{epoch\}.pth}. Ez a fájl tartalmazza a modell súlyait (\texttt{state\_dict}), az optimalizáló állapotát és a tanulási metrikákat.
+
+\subsection{Predikciós pipeline kódminta}
+A betanított modell gyakorlati felhasználása (inference) az alábbi minimális kódrészlettel végezhető el egy új képre:
+
+\begin{verbatim}
+import torch
+from torchvision.models.segmentation import deeplabv3_mobilenet_v3_large
+from PIL import Image
+import torchvision.transforms as T
+
+# 1. Modell inicializálása és súlyok betöltése
+model = deeplabv3_mobilenet_v3_large(num_classes=2)
+checkpoint = torch.load('checkpoints/best_model_epoch_12.pth', map_location='cpu')
+model.load_state_dict(checkpoint['model_state_dict'])
+model.eval()
+
+# 2. Kép betöltése és előfeldolgozása (ugyanaz a normalizáció, mint tanításnál)
+img = Image.open('test_image.jpg').convert('RGB')
+transform = T.Compose([
+    T.Resize((513, 513)),
+    T.ToTensor(),
+    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+])
+input_tensor = transform(img).unsqueeze(0) # Batch dimenzió hozzáadása
+
+# 3. Predikció (Inferencia)
+with torch.no_grad():
+    output = model(input_tensor)['out']
+    # Osztály valószínűségek és argmax (0: háttér, 1: polip)
+    prediction = torch.argmax(output.squeeze(), dim=0).byte().cpu().numpy()
+
+# A 'prediction' változó most egy 513x513-as bináris maszkot tartalmaz.
+\end{verbatim}
+
+\section{Ismert limitációk és jövőbeli bővítés}
+
+Bár a jelenlegi szoftverarchitektúra stabilan működik, szoftvermérnöki szempontból az alábbi korlátokkal és fejlesztési lehetőségekkel érdemes számolni:
+\begin{itemize}
+    \item \textbf{Korlátok:} A \texttt{batch\_size=4} relatív kicsi, amely a GPU memória (VRAM) korlátaiból fakad. Ez némileg zajosabb gradiens-frissítést eredményez. Az adathalmaz mérete (bár kiterjesztett) még mindig hagy teret a túltanulásnak, amit az early stopping hivatott tompítani.
+    \item \textbf{Továbbfejlesztés (Architektúra szinten):} Konfigurációs fájlok (pl. \texttt{config.yaml}) bevezetése a notebookba keménykódolt változók (hardcoded variables) helyett.
+    \item \textbf{Továbbfejlesztés (Inferencia):} A valós idejű endoszkópos felhasználáshoz a betanított PyTorch modell ONNX vagy TensorRT formátumba történő konvertálása javasolt a másodpercenkénti képkockaszám (FPS) drasztikus növelése érdekében.
+\end{itemize}
+
+\chapter{A valós idejű szegmentáló alkalmazás szoftveres dokumentációja}
+
+\section{Cél és kontextus}
+
+\subsection{A dokumentáció célja}
+Jelen melléklet a diplomamunkában bemutatott valós idejű polip szegmentáló alkalmazás (\texttt{live\_capture\_app.py}) szoftveres megvalósítását dokumentálja. Célja, hogy bemutassa az alkalmazás felépítését szoftvermérnöki szemszögből: a videófolyam kezelését, a szegmentáló modell integrációját és a felhasználói felület implementációját.
+
+\subsection{Kapcsolat a dolgozattal}
+Míg a dolgozat 4. fejezete (Szoftveralkalmazás) a rendszer követelményeit, az adatfolyam diagramot és a felhasználói élményt tárgyalja, ez a melléklet szigorúan az implementációra fókuszál: hogyan valósul meg a \texttt{VideoCaptureThread}, a \texttt{MedicalAnalyzer} és az \texttt{App} osztály, valamint a közöttük lévő adatáramlás.
+
+\subsection{Felhasználási szcenárió}
+Az alkalmazás élő videóforrásból (HDMI capture kártya, webkamera, videófájl) vagy szimulációs módban (képmappa) folyamatosan megjeleníti a képet, és a felhasználó gombnyomására (Space) vagy „Capture \& Analyze” gombra igény szerint elvégzi a polip szegmentálást és a demonstrációs klasszifikációt. A kimenet három panelen jelenik meg: élő kép, hálózati bemenet, szegmentált eredmény.
+
+\section{Fejlesztési környezet és függőségek}
+
+\subsection{Hardverkörnyezet}
+\begin{itemize}
+    \item \textbf{Bemeneti források:} HDMI capture kártya, USB webkamera, vagy helyi videófájl. Szimulációs módban: képmappa (\texttt{images/}).
+    \item \textbf{Számítási egység:} CPU vagy GPU (CUDA); a modell automatikusan detektálja a rendelkezésre álló eszközt (\texttt{torch.device('cuda' if torch.cuda.is\_available() else 'cpu')}).
+    \item \textbf{Tesztelt konfiguráció:} ASUS Zenbook 14 (AMD Ryzen 7, integrált grafikus) – a 5. fejezetben bemutatott teljesítménymérések alapján.
+\end{itemize}
+
+\subsection{Szoftverkörnyezet és verziók}
+\begin{itemize}
+    \item \textbf{Python:} 3.x
+    \item \textbf{Kritikus függőségek:} \texttt{opencv-python} (cv2), \texttt{torch}, \texttt{torchvision}, \texttt{PIL} (Pillow), \texttt{numpy}, \texttt{tkinter} (GUI, általában Python része)
+    \item \textbf{Projekt-specifikus:} \texttt{network.modeling} (deeplabv3plus\_mobilenet), \texttt{utils.ext\_transforms} (ExtResize, ExtCenterCrop, ExtToTensor, ExtNormalize)
+    \item \textbf{Opcionális:} \texttt{pygrabber} (DirectShow kameralista Windows-on; hiányában egyszerű indexelés)
+\end{itemize}
+
+\subsection{Környezet felállítása és futtatás}
+\begin{itemize}
+    \item A projekt gyökérkönyvtárából: \texttt{python live\_capture\_app.py}
+    \item A checkpoint elérési útja: \texttt{checkpoints/best\_model\_epoch\_38.pth} (konfigurálható a fájl elején)
+\end{itemize}
+
+\section{Rendszerarchitektúra magas szinten}
+
+A rendszer három fő modulból áll, amelyek a dolgozat 4. fejezetének adatfolyam diagramjához igazodnak:
+
+\begin{enumerate}
+    \item \textbf{VideoCaptureThread:} Dedikált szálon folyamatosan olvassa a videóforrást (kamera, videófájl) vagy szimulációs módban véletlenszerű képeket tölt be. A legfrissebb képkocka szálbiztos lock-kal védett.
+    \item \textbf{MedicalAnalyzer:} Betölti a DeepLabV3+ modellt, előfeldolgozza a képet (513×513, ImageNet normalizáció), inferenciát futtat, vizualizálja a maszkot és naplózza a teljesítményt (CSV).
+    \item \textbf{App (GUI):} Tkinter alapú hárompaneles felület, kezeli a forrásválasztást, a „Capture \& Analyze” műveletet és a Space billentyű kötését.
+\end{enumerate}
+
+\section{Modulok részletesen}
+
+\subsection{VideoCaptureThread}
+\begin{itemize}
+    \item \textbf{Felelősség:} Videófolyam vagy szimulációs képek folyamatos betöltése dedikált daemon szálon.
+    \item \textbf{Bemenetek:} \texttt{src} (kamera index int vagy videófájl útvonal string), \texttt{simulation\_mode}, \texttt{image\_folder}.
+    \item \textbf{Szimulációs mód:} \texttt{images/} mappa, szűrés \texttt{allowed\_ids} lista alapján (pl. PI009, PI015, …). 2 másodpercenként véletlenszerű kép váltás.
+    \item \textbf{Videófájl mód:} \texttt{set\_position(percent)} – pozíció ugrás a sávval (slider). Hurok a fájl végén.
+    \item \textbf{Kimenet:} \texttt{read()} – (ret, frame) tuple, szálbiztos.
+\end{itemize}
+
+\subsection{MedicalAnalyzer}
+\begin{itemize}
+    \item \textbf{Felelősség:} Modell betöltése, előfeldolgozás, inferencia, vizualizáció, teljesítménynaplózás.
+    \item \textbf{Modell inicializálás:} \texttt{deeplabv3plus\_mobilenet(num\_classes=2, output\_stride=16)}. Checkpoint kulcsok: \texttt{model\_state}, \texttt{model\_state\_dict}, \texttt{state\_dict} vagy gyökér.
+    \item \textbf{Előfeldolgozás:} \texttt{ExtResize(513)} $\rightarrow$ \texttt{ExtCenterCrop(513)} $\rightarrow$ \texttt{ExtToTensor} $\rightarrow$ \texttt{ExtNormalize} (ImageNet mean/std) – összhangban a notebook validációs transzformációival.
+    \item \textbf{Inferencia:} \texttt{model(input\_tensor)}, \texttt{output.max(1)[1]} $\rightarrow$ bináris maszk (513×513).
+    \item \textbf{Vizualizáció:} Polip maszk alapján az eredeti kép tartalma megjelenik, háttér fekete.
+    \item \textbf{Klasszifikáció:} Jelenleg \texttt{dummy\_classify()} – véletlenszerű demonstrációs eredmény (Adenoma/Hyperplastic/Serrated). Interfész készen áll valódi modell cseréjére.
+    \item \textbf{Naplózás:} \texttt{performance\_log.csv} – Timestamp, Total\_Time\_ms, Preprocess\_ms, Inference\_ms, Postprocess\_ms.
+\end{itemize}
+
+\subsection{App (GUI)}
+\begin{itemize}
+    \item \textbf{Layout:} Grid: felső sor (forrásválasztó, gombok, Live Analysis checkbox, videó slider), középső sor (3 panel: Live Feed, Network Input, Polyp Segmentation), alsó sor (Capture \& Analyze gomb, státusz).
+    \item \textbf{Forrásválasztás:} Combobox – kameralista (\texttt{list\_available\_cameras()}), videófájlok a projekt mappájában. „Start Live Input” / „Simulation (Images)” gombok.
+    \item \textbf{Billentyűkötés:} Space $\rightarrow$ \texttt{capture\_and\_analyze()}.
+    \item \textbf{Live Analysis:} Checkbox bekapcsolásakor minden GUI frissítési ciklusban (33 ms) lefut az elemzés – nagy terhelés, főleg demonstrációs célra.
+    \item \textbf{Panel méretek:} Megjelenítés 400 px magasságúra skálázva.
+\end{itemize}
+
+\section{Konfiguráció és fájlstruktúra}
+
+\subsection{Konfigurációs változók}
+\begin{itemize}
+    \item \texttt{PERFORMANCE\_LOG\_FILE} – CSV napló neve
+    \item \texttt{CHECKPOINT\_PATH} – modell súlyok útvonala
+    \item \texttt{NUM\_CLASSES}, \texttt{OUTPUT\_STRIDE}, \texttt{INPUT\_SIZE} (513)
+    \item \texttt{DEVICE} – automatikus CUDA/CPU választás
+\end{itemize}
+
+\subsection{Várt fájlstruktúra}
+\begin{verbatim}
+projekt_gyökér/
+├── live_capture_app.py
+├── network/
+│   └── modeling.py          # deeplabv3plus_mobilenet
+├── utils/
+│   └── ext_transforms.py    # ExtResize, ExtCenterCrop, stb.
+├── checkpoints/
+│   └── best_model_epoch_38.pth
+├── images/                  # Szimulációs mód (opcionális)
+│   └── *.jpg, *.png
+└── performance_log.csv       # Generált futás közben
+\end{verbatim}
+
+\section{Adatfolyam és szálkezelés}
+
+\subsection{Szálmodell}
+\begin{itemize}
+    \item \textbf{Capture szál:} Daemon thread, folyamatosan olvassa a forrást, lock-kal védi a \texttt{frame} változót.
+    \item \textbf{GUI szál (main):} \texttt{root.after(33, update\_live\_feed)} – 30 FPS megjelenítés. A \texttt{capture\_and\_analyze} szinkron módon fut a főszálon (blokkoló).
+    \item \textbf{Konfliktusok elkerülése:} \texttt{VideoCaptureThread.set\_position} lock-kal védett, hogy a seek ne ütközzön az olvasással.
+\end{itemize}
+
+\subsection{Elemzési folyamat (Capture \& Analyze)}
+\begin{enumerate}
+    \item \texttt{video\_thread.read()} – pillanatnyi képkocka
+    \item \texttt{analyzer.analyze(frame)} – preprocess $\rightarrow$ inference $\rightarrow$ postprocess $\rightarrow$ vizualizáció
+    \item Panel frissítés (snapshot, result)
+    \item Státusz szöveg: klasszifikációs eredmény + feldolgozási idő
+\end{enumerate}
+
+\section{Ismert limitációk és jövőbeli bővítés}
+
+\begin{itemize}
+    \item \textbf{Klasszifikátor:} Jelenleg dummy; valódi patológiai modell integrálása szükséges a klinikai használathoz.
+    \item \textbf{Teljesítmény:} ~350 ms válaszidő CPU-n (Zenbook); GPU-val vagy TensorRT optimalizálással javítható.
+    \item \textbf{4K / nagy felbontás:} Középre vágás 513×513-re – részletesebb kontextus elveszhet.
+    \item \textbf{Platform:} A \texttt{pygrabber} és a DirectShow kameralista Windows-specifikus; Linux/Mac más megoldást igényel.
+\end{itemize}
+
+\section{Reprodukálhatóság és futtatási lépések}
+
+\begin{itemize}
+    \item \textbf{Checkpoint:} A notebookban tanított \texttt{best\_model\_epoch\_38.pth} (vagy aktuális legjobb) másolása a \texttt{checkpoints/} mappába.
+    \item \textbf{Futtatás:} \texttt{python live\_capture\_app.py} a projekt gyökéréből.
+    \item \textbf{Szimulációs teszt:} \texttt{images/} mappa létrehozása, releváns páciens ID-jú képek másolása (pl. PI009, PI015, …).
+\end{itemize}
+
+\end{document}

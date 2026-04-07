@@ -1,0 +1,14 @@
+[0] Config.pm:328> INFO - This is Biber 2.21
+[0] Config.pm:331> INFO - Logfile is 'szakdolgozat.blg'
+[170] biber-MSWIN64:342> INFO - === 
+[220] Biber.pm:421> INFO - Reading 'szakdolgozat.bcf'
+[373] Biber.pm:1002> INFO - Found 7 citekeys in bib section 0
+[402] Biber.pm:4487> INFO - Processing section 0
+[421] Biber.pm:4678> INFO - Looking for bibtex file 'irodalom.bib' for section 0
+[484] bibtex.pm:1713> INFO - LaTeX decoding ...
+[513] bibtex.pm:1519> INFO - Found BibTeX data source 'irodalom.bib'
+[654] UCollate.pm:68> INFO - Overriding locale 'hu-HU' defaults 'variable = shifted' with 'variable = non-ignorable'
+[654] UCollate.pm:68> INFO - Overriding locale 'hu-HU' defaults 'normalization = NFD' with 'normalization = prenormalized'
+[654] Biber.pm:4307> INFO - Sorting list 'none/global//global/global/global' of type 'entry' with template 'none' and locale 'hu-HU'
+[663] bbl.pm:676> INFO - Writing 'szakdolgozat.bbl' with encoding 'UTF-8'
+[677] bbl.pm:779> INFO - Output to szakdolgozat.bbl

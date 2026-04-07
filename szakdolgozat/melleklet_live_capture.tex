@@ -1,0 +1,135 @@
+\chapter{A valós idejű szegmentáló alkalmazás szoftveres dokumentációja}
+
+\section{Cél és kontextus}
+
+\subsection{A dokumentáció célja}
+Jelen melléklet a diplomamunkában bemutatott valós idejű polip szegmentáló alkalmazás (\texttt{live\_capture\_app.py}) szoftveres megvalósítását dokumentálja. Célja, hogy bemutassa az alkalmazás felépítését szoftvermérnöki szemszögből: a videófolyam kezelését, a szegmentáló modell integrációját és a felhasználói felület implementációját.
+
+\subsection{Kapcsolat a dolgozattal}
+Míg a dolgozat 4. fejezete (Szoftveralkalmazás) a rendszer követelményeit, az adatfolyam diagramot és a felhasználói élményt tárgyalja, ez a melléklet szigorúan az implementációra fókuszál: hogyan valósul meg a \texttt{VideoCaptureThread}, a \texttt{MedicalAnalyzer} és az \texttt{App} osztály, valamint a közöttük lévő adatáramlás.
+
+\subsection{Felhasználási szcenárió}
+Az alkalmazás élő videóforrásból (HDMI capture kártya, webkamera, videófájl) vagy szimulációs módban (képmappa) folyamatosan megjeleníti a képet, és a felhasználó gombnyomására (Space) vagy „Capture \& Analyze” gombra igény szerint elvégzi a polip szegmentálást és a demonstrációs klasszifikációt. A kimenet három panelen jelenik meg: élő kép, hálózati bemenet, szegmentált eredmény.
+
+\section{Fejlesztési környezet és függőségek}
+
+\subsection{Hardverkörnyezet}
+\begin{itemize}
+    \item \textbf{Bemeneti források:} HDMI capture kártya, USB webkamera, vagy helyi videófájl. Szimulációs módban: képmappa (\texttt{images/}).
+    \item \textbf{Számítási egység:} CPU vagy GPU (CUDA); a modell automatikusan detektálja a rendelkezésre álló eszközt (\texttt{torch.device('cuda' if torch.cuda.is\_available() else 'cpu')}).
+    \item \textbf{Tesztelt konfiguráció:} ASUS Zenbook 14 (AMD Ryzen 7, integrált grafikus) – a 5. fejezetben bemutatott teljesítménymérések alapján.
+\end{itemize}
+
+\subsection{Szoftverkörnyezet és verziók}
+\begin{itemize}
+    \item \textbf{Python:} 3.x
+    \item \textbf{Kritikus függőségek:} \texttt{opencv-python} (cv2), \texttt{torch}, \texttt{torchvision}, \texttt{PIL} (Pillow), \texttt{numpy}, \texttt{tkinter} (GUI, általában Python része)
+    \item \textbf{Projekt-specifikus:} \texttt{network.modeling} (deeplabv3plus\_mobilenet), \texttt{utils.ext\_transforms} (ExtResize, ExtCenterCrop, ExtToTensor, ExtNormalize)
+    \item \textbf{Opcionális:} \texttt{pygrabber} (DirectShow kameralista Windows-on; hiányában egyszerű indexelés)
+\end{itemize}
+
+\subsection{Környezet felállítása és futtatás}
+\begin{itemize}
+    \item A projekt gyökérkönyvtárából: \texttt{python live\_capture\_app.py}
+    \item A checkpoint elérési útja: \texttt{checkpoints/best\_model\_epoch\_38.pth} (konfigurálható a fájl elején)
+\end{itemize}
+
+\section{Rendszerarchitektúra magas szinten}
+
+A rendszer három fő modulból áll, amelyek a dolgozat 4. fejezetének adatfolyam diagramjához igazodnak:
+
+\begin{enumerate}
+    \item \textbf{VideoCaptureThread:} Dedikált szálon folyamatosan olvassa a videóforrást (kamera, videófájl) vagy szimulációs módban véletlenszerű képeket tölt be. A legfrissebb képkocka szálbiztos lock-kal védett.
+    \item \textbf{MedicalAnalyzer:} Betölti a DeepLabV3+ modellt, előfeldolgozza a képet (513×513, ImageNet normalizáció), inferenciát futtat, vizualizálja a maszkot és naplózza a teljesítményt (CSV).
+    \item \textbf{App (GUI):} Tkinter alapú hárompaneles felület, kezeli a forrásválasztást, a „Capture \& Analyze” műveletet és a Space billentyű kötését.
+\end{enumerate}
+
+\section{Modulok részletesen}
+
+\subsection{VideoCaptureThread}
+\begin{itemize}
+    \item \textbf{Felelősség:} Videófolyam vagy szimulációs képek folyamatos betöltése dedikált daemon szálon.
+    \item \textbf{Bemenetek:} \texttt{src} (kamera index int vagy videófájl útvonal string), \texttt{simulation\_mode}, \texttt{image\_folder}.
+    \item \textbf{Szimulációs mód:} \texttt{images/} mappa, szűrés \texttt{allowed\_ids} lista alapján (pl. PI009, PI015, …). 2 másodpercenként véletlenszerű kép váltás.
+    \item \textbf{Videófájl mód:} \texttt{set\_position(percent)} – pozíció ugrás a sávval (slider). Hurok a fájl végén.
+    \item \textbf{Kimenet:} \texttt{read()} – (ret, frame) tuple, szálbiztos.
+\end{itemize}
+
+\subsection{MedicalAnalyzer}
+\begin{itemize}
+    \item \textbf{Felelősség:} Modell betöltése, előfeldolgozás, inferencia, vizualizáció, teljesítménynaplózás.
+    \item \textbf{Modell inicializálás:} \texttt{deeplabv3plus\_mobilenet(num\_classes=2, output\_stride=16)}. Checkpoint kulcsok: \texttt{model\_state}, \texttt{model\_state\_dict}, \texttt{state\_dict} vagy gyökér.
+    \item \textbf{Előfeldolgozás:} \texttt{ExtResize(513)} $\rightarrow$ \texttt{ExtCenterCrop(513)} $\rightarrow$ \texttt{ExtToTensor} $\rightarrow$ \texttt{ExtNormalize} (ImageNet mean/std) – összhangban a notebook validációs transzformációival.
+    \item \textbf{Inferencia:} \texttt{model(input\_tensor)}, \texttt{output.max(1)[1]} $\rightarrow$ bináris maszk (513×513).
+    \item \textbf{Vizualizáció:} Polip maszk alapján az eredeti kép tartalma megjelenik, háttér fekete.
+    \item \textbf{Klasszifikáció:} Jelenleg \texttt{dummy\_classify()} – véletlenszerű demonstrációs eredmény (Adenoma/Hyperplastic/Serrated). Interfész készen áll valódi modell cseréjére.
+    \item \textbf{Naplózás:} \texttt{performance\_log.csv} – Timestamp, Total\_Time\_ms, Preprocess\_ms, Inference\_ms, Postprocess\_ms.
+\end{itemize}
+
+\subsection{App (GUI)}
+\begin{itemize}
+    \item \textbf{Layout:} Grid: felső sor (forrásválasztó, gombok, Live Analysis checkbox, videó slider), középső sor (3 panel: Live Feed, Network Input, Polyp Segmentation), alsó sor (Capture \& Analyze gomb, státusz).
+    \item \textbf{Forrásválasztás:} Combobox – kameralista (\texttt{list\_available\_cameras()}), videófájlok a projekt mappájában. „Start Live Input” / „Simulation (Images)” gombok.
+    \item \textbf{Billentyűkötés:} Space $\rightarrow$ \texttt{capture\_and\_analyze()}.
+    \item \textbf{Live Analysis:} Checkbox bekapcsolásakor minden GUI frissítési ciklusban (33 ms) lefut az elemzés – nagy terhelés, főleg demonstrációs célra.
+    \item \textbf{Panel méretek:} Megjelenítés 400 px magasságúra skálázva.
+\end{itemize}
+
+\section{Konfiguráció és fájlstruktúra}
+
+\subsection{Konfigurációs változók}
+\begin{itemize}
+    \item \texttt{PERFORMANCE\_LOG\_FILE} – CSV napló neve
+    \item \texttt{CHECKPOINT\_PATH} – modell súlyok útvonala
+    \item \texttt{NUM\_CLASSES}, \texttt{OUTPUT\_STRIDE}, \texttt{INPUT\_SIZE} (513)
+    \item \texttt{DEVICE} – automatikus CUDA/CPU választás
+\end{itemize}
+
+\subsection{Várt fájlstruktúra}
+\begin{verbatim}
+projekt_gyökér/
+├── live_capture_app.py
+├── network/
+│   └── modeling.py          # deeplabv3plus_mobilenet
+├── utils/
+│   └── ext_transforms.py    # ExtResize, ExtCenterCrop, stb.
+├── checkpoints/
+│   └── best_model_epoch_38.pth
+├── images/                  # Szimulációs mód (opcionális)
+│   └── *.jpg, *.png
+└── performance_log.csv       # Generált futás közben
+\end{verbatim}
+
+\section{Adatfolyam és szálkezelés}
+
+\subsection{Szálmodell}
+\begin{itemize}
+    \item \textbf{Capture szál:} Daemon thread, folyamatosan olvassa a forrást, lock-kal védi a \texttt{frame} változót.
+    \item \textbf{GUI szál (main):} \texttt{root.after(33, update\_live\_feed)} – 30 FPS megjelenítés. A \texttt{capture\_and\_analyze} szinkron módon fut a főszálon (blokkoló).
+    \item \textbf{Konfliktusok elkerülése:} \texttt{VideoCaptureThread.set\_position} lock-kal védett, hogy a seek ne ütközzön az olvasással.
+\end{itemize}
+
+\subsection{Elemzési folyamat (Capture \& Analyze)}
+\begin{enumerate}
+    \item \texttt{video\_thread.read()} – pillanatnyi képkocka
+    \item \texttt{analyzer.analyze(frame)} – preprocess $\rightarrow$ inference $\rightarrow$ postprocess $\rightarrow$ vizualizáció
+    \item Panel frissítés (snapshot, result)
+    \item Státusz szöveg: klasszifikációs eredmény + feldolgozási idő
+\end{enumerate}
+
+\section{Ismert limitációk és jövőbeli bővítés}
+
+\begin{itemize}
+    \item \textbf{Klasszifikátor:} Jelenleg dummy; valódi patológiai modell integrálása szükséges a klinikai használathoz.
+    \item \textbf{Teljesítmény:} ~350 ms válaszidő CPU-n (Zenbook); GPU-val vagy TensorRT optimalizálással javítható.
+    \item \textbf{4K / nagy felbontás:} Középre vágás 513×513-re – részletesebb kontextus elveszhet.
+    \item \textbf{Platform:} A \texttt{pygrabber} és a DirectShow kameralista Windows-specifikus; Linux/Mac más megoldást igényel.
+\end{itemize}
+
+\section{Reprodukálhatóság és futtatási lépések}
+
+\begin{itemize}
+    \item \textbf{Checkpoint:} A notebookban tanított \texttt{best\_model\_epoch\_38.pth} (vagy aktuális legjobb) másolása a \texttt{checkpoints/} mappába.
+    \item \textbf{Futtatás:} \texttt{python live\_capture\_app.py} a projekt gyökéréből.
+    \item \textbf{Szimulációs teszt:} \texttt{images/} mappa létrehozása, releváns páciens ID-jú képek másolása (pl. PI009, PI015, …).
+\end{itemize}

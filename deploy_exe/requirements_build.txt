@@ -1,0 +1,3 @@
+# Csak a BUILD gépen (tiszta venv): requirements_app.txt + PyInstaller
+-r ../requirements_app.txt
+pyinstaller>=6.0

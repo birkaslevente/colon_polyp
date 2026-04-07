@@ -1,0 +1,125 @@
+\babel@toc {magyar}{}\relax 
+\contentsline {chapter}{\numberline {1}Bevezetés}{4}{}%
+\contentsline {section}{\numberline {1.1}Motiváció és klinikai háttér}{4}{}%
+\contentsline {subsection}{\numberline {1.1.1}A kolonoszkópia szerepe és az „elmulasztott polipok” problémája}{4}{}%
+\contentsline {subsection}{\numberline {1.1.2}A vastagbélrák népegészségügyi jelentősége}{4}{}%
+\contentsline {subsection}{\numberline {1.1.3}A számítógépes diagnosztika szükségessége a valós idejű vizsgálatok során}{5}{}%
+\contentsline {section}{\numberline {1.2}Technológiai kihívások}{5}{}%
+\contentsline {subsection}{\numberline {1.2.1}Élő kép megjelenítés és igény szerinti elemzés követelményei}{5}{}%
+\contentsline {subsection}{\numberline {1.2.2}HDMI videójel feldolgozásának nehézségei orvosi környezetben}{5}{}%
+\contentsline {subsection}{\numberline {1.2.3}Különböző AI modellek integrációja}{6}{}%
+\contentsline {section}{\numberline {1.3}A szakdolgozat célkitűzései}{6}{}%
+\contentsline {subsection}{\numberline {1.3.1}AI-alapú szegmentáló modell fejlesztése és tanítása}{6}{}%
+\contentsline {subsection}{\numberline {1.3.2}Moduláris Python alkalmazás élő videó megjelenítésre és gombnyomásra történő szegmentálásra és klasszifikációra}{6}{}%
+\contentsline {subsection}{\numberline {1.3.3}Interfész biztosítása külső osztályozó modulok számára}{7}{}%
+\contentsline {section}{\numberline {1.4}A dolgozat felépítése}{7}{}%
+\contentsline {chapter}{\numberline {2}Elméleti háttér és módszertan}{8}{}%
+\contentsline {section}{\numberline {2.1}Alapfogalmak és definíciók}{8}{}%
+\contentsline {subsection}{\numberline {2.1.1}Szemantikus szegmentáció vs. objektum detektálás}{8}{}%
+\contentsline {subsection}{\numberline {2.1.2}Kiértékelési metrikák}{8}{}%
+\contentsline {subsubsection}{Metszet és unió hányadosa}{9}{}%
+\contentsline {subsubsection}{Dice-együttható}{9}{}%
+\contentsline {subsection}{\numberline {2.1.3}Valós idejű rendszerek teljesítménymutatói}{9}{}%
+\contentsline {section}{\numberline {2.2}Irodalmi áttekintés}{10}{}%
+\contentsline {subsection}{\numberline {2.2.1}Mélytanulás az orvosi képfeldolgozásban}{10}{}%
+\contentsline {subsection}{\numberline {2.2.2}A DeepLab modellcsalád és az ASPP modul}{10}{}%
+\contentsline {subsection}{\numberline {2.2.3}Valós idejű videófeldolgozás Python környezetben}{10}{}%
+\contentsline {section}{\numberline {2.3}Alkalmazott eszközök és technológiák}{11}{}%
+\contentsline {subsection}{\numberline {2.3.1}Programozási környezet}{11}{}%
+\contentsline {subsection}{\numberline {2.3.2}Képfeldolgozó könyvtárak}{11}{}%
+\contentsline {subsection}{\numberline {2.3.3}Hardveres környezet}{11}{}%
+\contentsline {subsubsection}{Tanító környezet}{11}{}%
+\contentsline {subsubsection}{Tesztelési és futtatási környezet}{12}{}%
+\contentsline {chapter}{\numberline {3}A szegmentáló modell tervezése és implementációja}{13}{}%
+\contentsline {section}{\numberline {3.1}Adatbázisok és előkészítés}{13}{}%
+\contentsline {subsection}{\numberline {3.1.1}Adatbázisok bemutatása}{13}{}%
+\contentsline {subsection}{\numberline {3.1.2}Adattisztítás és annotációs kihívások}{13}{}%
+\contentsline {subsection}{\numberline {3.1.3}Augmentációs stratégiák}{14}{}%
+\contentsline {section}{\numberline {3.2}Modell architektúra}{14}{}%
+\contentsline {subsection}{\numberline {3.2.1}DeepLabV3+ kiválasztásának indoklása}{14}{}%
+\contentsline {subsection}{\numberline {3.2.2}MobileNetV2 backbone előnyei}{15}{}%
+\contentsline {subsection}{\numberline {3.2.3}Veszteségfüggvény és optimalizáció}{15}{}%
+\contentsline {section}{\numberline {3.3}Tanítási és validációs stratégia}{16}{}%
+\contentsline {subsection}{\numberline {3.3.1}Transzfer tanulás}{16}{}%
+\contentsline {subsection}{\numberline {3.3.2}A StratifiedGroupKFold jelentősége}{16}{}%
+\contentsline {subsection}{\numberline {3.3.3}Hiperparaméterek}{16}{}%
+\contentsline {chapter}{\numberline {4}A szoftveralkalmazás tervezése és fejlesztése}{18}{}%
+\contentsline {section}{\numberline {4.1}Rendszerarchitektúra és követelmények}{18}{}%
+\contentsline {subsection}{\numberline {4.1.1}Funkcionális követelmények}{18}{}%
+\contentsline {subsection}{\numberline {4.1.2}Nem-funkcionális követelmények}{18}{}%
+\contentsline {subsection}{\numberline {4.1.3}Heterogén keretrendszerek integrációja}{19}{}%
+\contentsline {subsection}{\numberline {4.1.4}Adatfolyam diagram}{19}{}%
+\contentsline {section}{\numberline {4.2}Implementációs részletek}{20}{}%
+\contentsline {subsection}{\numberline {4.2.1}Videó rögzítő modul}{20}{}%
+\contentsline {subsection}{\numberline {4.2.2}Inferáló motor}{20}{}%
+\contentsline {subsection}{\numberline {4.2.3}Konfidencia-alapú döntéstámogatás és a klasszifikátor interfész}{20}{}%
+\contentsline {section}{\numberline {4.3}Felhasználói felület terve}{21}{}%
+\contentsline {subsection}{\numberline {4.3.1}Orvosi felhasználói élmény}{21}{}%
+\contentsline {subsection}{\numberline {4.3.2}Vizualizációs megoldások}{21}{}%
+\contentsline {subsection}{\numberline {4.3.3}Adatgyűjtés és automatikus mentés}{22}{}%
+\contentsline {chapter}{\numberline {5}Eredmények és kiértékelés}{23}{}%
+\contentsline {section}{\numberline {5.1}A szegmentáló modell teljesítménye}{23}{}%
+\contentsline {subsection}{\numberline {5.1.1}Kvantitatív eredmények}{23}{}%
+\contentsline {subsection}{\numberline {5.1.2}Kvalitatív elemzés}{24}{}%
+\contentsline {section}{\numberline {5.2}Rendszerteljesítmény mérése}{24}{}%
+\contentsline {subsection}{\numberline {5.2.1}Megjelenítési sebesség és igény szerinti elemzési idő}{24}{}%
+\contentsline {subsection}{\numberline {5.2.2}Teljes késleltetés és erőforrás-használat}{25}{}%
+\contentsline {section}{\numberline {5.3}Diszkusszió}{25}{}%
+\contentsline {subsection}{\numberline {5.3.1}A gombnyomásra történő elemzés korlátai}{25}{}%
+\contentsline {subsection}{\numberline {5.3.2}Illeszthetőség a munkafolyamatba}{25}{}%
+\contentsline {chapter}{\numberline {6}Összefoglalás és jövőbeli tervek}{27}{}%
+\contentsline {section}{\numberline {6.1}Az elért eredmények összefoglalása}{27}{}%
+\contentsline {section}{\numberline {6.2}A fejlesztés korlátai}{27}{}%
+\contentsline {section}{\numberline {6.3}Jövőbeli fejlesztési irányok}{28}{}%
+\contentsline {subsection}{\numberline {6.3.1}Hardveres optimalizáció}{28}{}%
+\contentsline {subsection}{\numberline {6.3.2}Temporális utófeldolgozás}{28}{}%
+\contentsline {subsection}{\numberline {6.3.3}További integráció}{28}{}%
+\contentsline {chapter}{\numberline {A}A kolorektális polip szegmentáló modell szoftveres fejlesztésének dokumentációja}{30}{}%
+\contentsline {section}{\numberline {A.1}Cél és kontextus}{30}{}%
+\contentsline {subsection}{\numberline {A.1.1}A dokumentáció célja}{30}{}%
+\contentsline {subsection}{\numberline {A.1.2}Kapcsolat a dolgozattal}{30}{}%
+\contentsline {subsection}{\numberline {A.1.3}Felhasználási szcenárió}{30}{}%
+\contentsline {section}{\numberline {A.2}Fejlesztési környezet és függőségek}{31}{}%
+\contentsline {subsection}{\numberline {A.2.1}Hardverkörnyezet}{31}{}%
+\contentsline {subsection}{\numberline {A.2.2}Szoftverkörnyezet és verziók}{31}{}%
+\contentsline {subsection}{\numberline {A.2.3}Környezet felállítása}{31}{}%
+\contentsline {section}{\numberline {A.3}Rendszerarchitektúra magas szinten}{31}{}%
+\contentsline {section}{\numberline {A.4}Adatkezelés és előfeldolgozás}{32}{}%
+\contentsline {subsection}{\numberline {A.4.1}Címtárszerkezet}{32}{}%
+\contentsline {subsection}{\numberline {A.4.2}PyTorch Dataset és Dataloader}{32}{}%
+\contentsline {subsection}{\numberline {A.4.3}Transzformációk}{33}{}%
+\contentsline {section}{\numberline {A.5}Modellkomponens}{33}{}%
+\contentsline {subsection}{\numberline {A.5.1}Inicializálás és architektúra}{33}{}%
+\contentsline {subsection}{\numberline {A.5.2}Veszteségfüggvény és Optimalizáló}{33}{}%
+\contentsline {section}{\numberline {A.6}Tanítási és validációs folyamat}{34}{}%
+\contentsline {subsection}{\numberline {A.6.1}Tanító ciklus}{34}{}%
+\contentsline {subsection}{\numberline {A.6.2}Validáció és korai megállás}{34}{}%
+\contentsline {section}{\numberline {A.7}Eredmények reprodukálhatósága}{34}{}%
+\contentsline {subsection}{\numberline {A.7.1}Seed beállítások}{34}{}%
+\contentsline {subsection}{\numberline {A.7.2}Hiperparaméter konfiguráció}{35}{}%
+\contentsline {section}{\numberline {A.8}Kimenetek és használat}{35}{}%
+\contentsline {subsection}{\numberline {A.8.1}Checkpoint kezelés}{35}{}%
+\contentsline {subsection}{\numberline {A.8.2}Predikciós pipeline kódminta}{35}{}%
+\contentsline {section}{\numberline {A.9}Ismert limitációk és jövőbeli bővítés}{36}{}%
+\contentsline {chapter}{\numberline {B}A valós idejű szegmentáló alkalmazás szoftveres dokumentációja}{37}{}%
+\contentsline {section}{\numberline {B.1}Cél és kontextus}{37}{}%
+\contentsline {subsection}{\numberline {B.1.1}A dokumentáció célja}{37}{}%
+\contentsline {subsection}{\numberline {B.1.2}Kapcsolat a dolgozattal}{37}{}%
+\contentsline {subsection}{\numberline {B.1.3}Felhasználási szcenárió}{37}{}%
+\contentsline {section}{\numberline {B.2}Fejlesztési környezet és függőségek}{38}{}%
+\contentsline {subsection}{\numberline {B.2.1}Hardverkörnyezet}{38}{}%
+\contentsline {subsection}{\numberline {B.2.2}Szoftverkörnyezet és verziók}{38}{}%
+\contentsline {subsection}{\numberline {B.2.3}Környezet felállítása és futtatás}{38}{}%
+\contentsline {section}{\numberline {B.3}Rendszerarchitektúra magas szinten}{38}{}%
+\contentsline {section}{\numberline {B.4}Modulok részletesen}{39}{}%
+\contentsline {subsection}{\numberline {B.4.1}VideoCaptureThread}{39}{}%
+\contentsline {subsection}{\numberline {B.4.2}MedicalAnalyzer}{39}{}%
+\contentsline {subsection}{\numberline {B.4.3}App (GUI)}{40}{}%
+\contentsline {section}{\numberline {B.5}Konfiguráció és fájlstruktúra}{40}{}%
+\contentsline {subsection}{\numberline {B.5.1}Konfigurációs változók}{40}{}%
+\contentsline {subsection}{\numberline {B.5.2}Várt fájlstruktúra}{40}{}%
+\contentsline {section}{\numberline {B.6}Adatfolyam és szálkezelés}{41}{}%
+\contentsline {subsection}{\numberline {B.6.1}Szálmodell}{41}{}%
+\contentsline {subsection}{\numberline {B.6.2}Elemzési folyamat (Capture \& Analyze)}{41}{}%
+\contentsline {section}{\numberline {B.7}Ismert limitációk és jövőbeli bővítés}{41}{}%
+\contentsline {section}{\numberline {B.8}Reprodukálhatóság és futtatási lépések}{41}{}%

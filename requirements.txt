@@ -1,0 +1,13 @@
+torch
+torchvision
+numpy
+pillow
+scikit-learn
+tqdm
+matplotlib
+visdom
+pandas
+opencv-python
+jsonschema
+openpyxl
+segmentation-models-pytorch

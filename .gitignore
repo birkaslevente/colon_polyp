@@ -1,0 +1,67 @@
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+
+# --- Képek, adat, naplók (ne kerüljön a repóba) ---
+/images/
+/saved_results/
+/Kvasir-SEG/
+Kvasir-SEG/
+Kvasir*/
+kvasir*/
+performance_log.csv
+LiveCapture_crash.log
+debug_run.log
+
+# Tömörített archív adat (nem videó)
+*.zip
+
+# Eseti személyes / hibaképek a gyökérben
+/*.pdf
+erinto*.csv
+erinto*.png
+
+# VOC / Cityscapes / eredeti upstream adat
+VOCdevkit/
+cityscapes/
+
+# Tanítási / teszt kimenetek
+results/
+test_results/
+checkpoints_bak/
+
+# Tanított modellek / súlyok (nagy fájlok — GitHubra ne, lásd MODELLOK_MASOLASA)
+checkpoints/
+checkpoints_unet/
+classificator_models/
+external_models/
+polyp_trained_e12_best_deeplabv3plus_mobilenet_voc_os16/
+nerthus/
+*.pth
+*.keras
+*.h5
+*.onnx
+*.pt
+
+# Python környezet és build kimenet
+zenbook_venv/
+venv/
+build_venv/
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Eszközök / IDE
+.cursor/
+.cursorignore
+*Copilot*Chat*.md
+
+# Mentések, WSL, nagy backup mappák
+backups/
+wsl/
+random_test/
+
+**/*.ipynb
+**/*.bat

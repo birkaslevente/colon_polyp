@@ -1,0 +1,17 @@
+A kész build mappájába (ahol az live_capture_app.exe van) másold be ugyanezt a szerkezetet a projekt gyökeréből:
+
+  checkpoints\
+    best_model_epoch_38.pth
+  checkpoints_unet\
+    best_model_epoch_22.pth
+  classificator_models\
+    resnet50v2_polyp_20260217_131050.keras
+
+Az alkalmazás futáskor ezeket az .exe melletti mappákból tölti (_BASE_DIR = az .exe könyvtára).
+
+Opcionális (szimuláció / teszt):
+  images\   (ha képekkel akarsz próbálni)
+
+A program létrehozza:
+  saved_results\
+  performance_log.csv
