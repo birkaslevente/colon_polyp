@@ -1,0 +1,106 @@
+---
+name: hu-academic-writing
+description: Magyar tudományos szöveg írása vagy javítása emberi stílusban. Használd, ha a felhasználó TDK dolgozatot, szakdolgozatot, tudományos cikket ír vagy szövegszerkesztést kér, és az a cél, hogy maximálisan emberinek hasson, elkerülve az AI detektorok (pl. Turnitin) általi felismerést.
+user-invocable: true
+---
+
+# Magyar Tudományos Írás — Emberi Stílus (Anti-AI Detector Mód)
+
+Ezt a skillt akkor alkalmazd, ha Németh Áron tudományos szöveget ír vagy javíttat. Célja: a szöveg természetesen, organikusan és emberien hasson. Maximalizáld a "burstiness" (mondatszerkezeti és ritmikai változatosság) és a "perplexity" (kiszámíthatatlanabb, de pontos emberi szóhasználat) metrikákat, hogy a szöveg átmenjen az AI detektorokon. A dolgozatot publikációs vagy TDK/szakdolgozat minőségűre kell hozni.
+
+---
+
+## Referencia-szöveg (helyes stílus)
+
+Az alábbi absztrakt az elfogadott referenciastílus. Pontosan ebbe a stílusba kell írni:
+
+> A nagy teljesítményű számítástechnikai rendszerek (High-Performance Computing, HPC) egyik jól ismert korlátja, hogy rövid feladatok esetén a Slurm sorbanállási idő gyakran nagyságrendekkel meghaladja a tényleges futási időt. A felhőalapú, eseményvezérelt végrehajtási modell (Function as a Service, FaaS) ezt a késleltetést nagyrészt kiküszöböli, ugyanakkor hidegindítási késleltetést, memóriakorlátokat és nagyobb sávszélességigényt vezet be. A dolgozat azt vizsgálja, hogy e két végrehajtási környezet milyen feltételek mellett kombinálható adaptívan úgy, hogy a futási idő, a költség és az energiafelhasználás közötti kompromisszum kedvezőbbé váljon.
+
+---
+
+## Kerülendő AI-stílusjelek és Buzzwordök (Anti-patterns)
+
+Ezeket a mintákat és szavakat SOHA ne használd:
+
+### 1. Letiltott AI "Buzzwordök"
+Az AI modellek túlzottan szeretik az alábbi szavakat. Ezeket cseréld egyszerűbb, specifikusabb szinonimákra!
+❌ `átfogó, elengedhetetlen, szignifikáns (csak statisztikai értelemben használd!), innovatív, fókuszál, paradigmaváltás, mélyreható, elmondható, egyértelműen`
+
+### 2. Mű-összefoglaló és "pompás" átvezetők
+❌ `Összességében elmondható, hogy... / Összefoglalva... / Ennek fényében... / Fontos megjegyezni, hogy...`
+✅ Kezdd egyből a konklúzióval vagy a tényállítással.
+
+### 3. Klónozott „biztosít / lehetővé tesz" láncok
+❌ `Ez lehetővé teszi... Ez biztosítja... Ez teszi lehetővé...`
+✅ Változatos mondatszerkezetek; aktív igék; néhol rövidebb mondat.
+
+### 4. „Három szinten / síkon / szempontból" bevezető (Túlzott strukturálás)
+❌ `A kutatás korlátai három szinten azonosíthatók.`
+✅ `A kutatásnak több korlátja is van.` — egyszerűen vezet be, nem hirdeti előre a struktúrát.
+
+### 5. „Formálisan:" / „Definíció szerint:" / „Az intuitív magyarázat:" nyitófrazémák
+❌ `Az intuitív magyarázat: ha a...`
+✅ `A logika egyszerű: ha a...` vagy közvetlen kifejtés bevezető nélkül.
+
+### 6. Tökéletes párhuzamos hármasok szövegben
+❌ `Először X. Másodszor Y. Harmadszor Z.` — ha mindhárom ugyanolyan hosszú és szerkezetű.
+✅ Eltérő mondathossz és hangsúly; egy ember sosem ír tökéletesen szimmetrikus listákat folyószövegben.
+
+### 7. Passzív nominális láncok (Hivatali bikkfanyelv)
+❌ `feltöltésre kerül a tárba, és az eredmény szintén ugyanoda kerül vissza`
+✅ `feltöltődik a tárba, az eredmény ugyanoda kerül vissza` — rövidebb, aktívabb.
+
+### 8. „Kulcsfontosságú" / „elsődleges fontosságú" túlhasználat
+❌ `Ez a döntés két szempontból is kulcsfontosságú a kutatás számára.`
+✅ Mutasd meg, *miért* fontos, ahelyett, hogy kijelented a fontosságát.
+
+### 9. Szövegtömbök: Minden bekezdés ugyanolyan hosszú
+Az AI szövegben a bekezdések hajlamosak egyforma hosszúak lenni (Burstiness hiba). Váltogasd: legyen 1-2 mondatos rövid, ütős bekezdés is, és hosszabb, kifejtős is.
+
+---
+
+## Helyes stílusjegyek (Emberi faktor maximalizálása)
+
+- **Burstiness (Mondathossz-variáció)**: Rakj egymás mellé egy nagyon rövid (akár 3-5 szavas) megállapítást és egy hosszan kifejtett, többszörösen összetett mondatot. Az emberi gondolkodás aszimmetrikus.
+- **Tudományos óvatosság (Hedging)**: Az AI gyakran túl magabiztos. Használj óvatosabb, emberibb megfogalmazásokat: `Az eredmények arra utalnak...`, `Feltehetően...`, `A mérések alapján úgy tűnik...`.
+- **Aktív igék**: `azonosítottuk`, `mértük`, `elvégeztük` — ne használd a `került` segédigét, ha nem muszáj.
+- **Kötőszavak mondat elején**: Nyugodtan kezdj mondatot úgy, hogy `Bár...`, `Ugyanakkor...`, `Ezzel szemben...`. Ez növeli a szöveg természetességét.
+- **Konkrétság**: Számok, mért értékek, tényleges eredmények előre — ne azt írd, hogy `jelentős javulást értünk el`, hanem hogy `23%-kal csökkent a futási idő`.
+
+---
+
+## LaTeX-specifikus szabályok
+
+- Magyar tizedesvessző: `$7{,}1$` — SOHA nem `$7.1$`.
+- Egységek: `\,s`, `\,ms`, `\,km²` — szóközzel az értéktől (pl. `$10\,ms$`).
+- Hivatkozások: `\cite{}` mindig az állítás után, a mondatvégi írásjel előtt. (pl. `...ahogy azt korábban leírták \cite{Smith2023}.`)
+- Táblázatcímek: tömören és informatívan — ne `Az X összehasonlítása Y-nal` stílusban.
+- Ne ismételd meg a táblázat tartalmát folyószövegben felsorolásszerűen — csak a trendeket és a kiugró értékeket foglald össze.
+
+---
+
+## Workflow
+
+Ha szöveget kérsz javítani vagy írni:
+
+1. Olvasd el a teljes kontextust (fejezet célja, körülötte lévő szöveg).
+2. Azonosítsd a konkrét AI-stílusjeleket és buzzwordöket a fenti lista szerint.
+3. Javítsd őket a helyes stílusjegyeket alkalmazva (fókusz a perplexity-n és burstiness-en).
+4. Ne változtass a kutatás tartalmán, méréseken, számokon, hivatkozásokon, egyenleteken.
+5. Az absztrakt **soha nem változtatható** — ha le van adva, érintetlen marad.
+6. Fordítsd le fejben, és ellenőrizd, hogy a LaTeX hibátlanul fordul-e (xelatex).
+
+### Ha a felhasználó vázlatpontokat ad meg (Szöveggenerálás):
+1. Építs a vázlatpontokból összefüggő, logikus folyószöveget.
+2. Sződd bele a szükséges átvezetőket, de **szigorúan maradj a megadott tényeknél, méréseknél és logikai ívnél**. 
+3. Ne találj ki új kutatási eredményeket, állításokat vagy hivatkozásokat (hallucináció elkerülése)!
+4. Már az első generálásnál alkalmazd a fenti "anti-AI" stílusszabályokat (burstiness, perplexity, buzzwordök kerülése).
+
+---
+
+## Fontos korlátok
+
+- **Soha ne változtasd meg a matematikai tartalmát** a szövegnek (egyenletek, számok, hivatkozások).
+- **Az absztrakt érintetlen**: ha a felhasználó azt mondja, le van adva, egy karaktert sem módosíthatsz.
+- **Ne adj hozzá új tartalmat vagy kitalált hivatkozást** — csak a meglévő textúra stílusát javítsd emberibbé.
+- **Ne adj saját véleményt** a kutatás helyességéről, ne moralizálj.

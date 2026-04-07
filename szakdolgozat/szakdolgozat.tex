@@ -52,46 +52,43 @@
 
 \begin{document}
 
-% --- CÍMLAP GENERÁLÁS (Manuális, sze-thesis stílus utánzat) ---
+% --- Címlap: elrendezés a sze-thesis.cls \maketitle mintájára (magyar szövegek) ---
 \begin{titlepage}
     \centering
-    \vspace*{0.8cm}
-    
-    \includegraphics[width=0.22\textwidth]{uni_logo.png}\par
-    \vspace{1cm}
-    
-    {\Large\bfseries \tanszek \par}
-    
-    \vspace{2.2cm}
-    
-    {\Huge\bfseries \cim \par}
-    
-    \vspace{1cm}
-    
-    {\LARGE Szakdolgozat \par}
-    
-    \vspace{2.2cm}
-    
-    \begin{minipage}{0.45\textwidth}
-        \begin{flushleft} \large
-            \emph{Belső konzulens:}\\
-            \belsoKonzulens \\
-            \vspace{0.5cm}
-            \emph{Külső konzulens:}\\
-            \kulsoKonzulens
-        \end{flushleft}
-    \end{minipage}
-    \hfill
-    \begin{minipage}{0.45\textwidth}
-        \begin{flushright} \large
-            \emph{Készítette:}\\
-            \szerzoNeve
-        \end{flushright}
-    \end{minipage}
-    
+    \includegraphics[width=6cm]{uni_logo.png}
+
+    \vspace*{3cm}
+
+    {\fontsize{26pt}{40pt}\selectfont\bfseries \cim \par}
+
+    \vspace{0.6cm}
+    {\large\bfseries Szakdolgozat \par}
+
+    \vspace{2cm}
+
+    {\fontsize{20pt}{26pt}\selectfont\bfseries \szerzoNeve \par}
+
     \vfill
-    
-    {\large \the\year \par}
+
+    \Large
+    Belső konzulens: \\
+    \belsoKonzulens
+
+    \vspace{0.8cm}
+    \normalsize
+    Külső konzulens: \\
+    \kulsoKonzulens
+
+    \vfill
+
+    \normalsize
+    Széchenyi István Egyetem \\
+    \tanszek
+
+    \vspace{1cm}
+
+    Győr \\
+    \today
 \end{titlepage}
 
 % --- TARTALOMJEGYZÉK ---
