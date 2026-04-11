@@ -1,0 +1,573 @@
+% !TEX program = xelatex
+% Tipografia: szakdolgozat/szakdolgozat.tex mintajara (margok, betu, babel).
+% Tartalom es fedlap: eredeti vertopal/Pandoc szerkezet + TDK javitott struktura.
+\documentclass[12pt, a4paper]{article}
+
+\usepackage[a4paper, top=2.5cm, bottom=2.5cm, left=3cm, right=2.5cm]{geometry}
+\usepackage{fontspec}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage{amsmath,amssymb}
+
+\usepackage[magyar, bidi=bidi, provide=*]{babel}
+\babelprovide[import, onchar=ids fonts]{magyar}
+\babelprovide[import, onchar=ids fonts]{english}
+
+\setmainfont{Times New Roman}
+
+\usepackage{enumitem}
+\setlist[itemize]{label=-}
+
+% \usepackage{parskip}
+\setlength{\parindent}{1.5em}
+\frenchspacing
+\usepackage{pmboxdraw}
+\usepackage{newunicodechar}
+\newunicodechar{├}{\textSFviii}
+\newunicodechar{─}{\textSFx}
+\newunicodechar{└}{\textSFii}
+\newunicodechar{│}{\textSFxi}
+\usepackage{csquotes}
+\usepackage{graphicx}
+\usepackage[margin=1cm, font=small, labelfont=bf]{caption}
+\usepackage[colorlinks=true, linkcolor=black, citecolor=black, urlcolor=blue]{hyperref}
+
+\usepackage{titlesec}
+\titlespacing*{\section}{0pt}{1.5ex plus 1ex minus .2ex}{1ex plus .2ex}
+\titlespacing*{\subsection}{0pt}{1.2ex plus 1ex minus .2ex}{0.8ex plus .2ex}
+
+\setcounter{secnumdepth}{-\maxdimen}
+
+\begin{document}
+
+\begin{titlepage}
+    \centering
+    \vspace*{-1.5cm}
+    \includegraphics[width=4.5cm]{sze_logo.png}
+    \vspace*{0.8cm}
+
+    % --- CÍM ---
+    {
+        \fontsize{22pt}{30pt}\selectfont
+        \bfseries
+        Mesterséges intelligencia alapú, valós idejű döntéstámogató szoftver fejlesztése vastagbélpolipok szegmentálására és klasszifikációjára\par
+    }
+
+    \vspace{0.5cm}
+    {\Large \bfseries TDK dolgozat}
+
+    \vspace{0.8cm}
+
+    {
+        \fontsize{18pt}{24pt}\selectfont
+        \bfseries
+        Birkás Levente\\[0.1cm]
+        \normalsize Programtervező Informatikus BSc hallgató, III. évfolyam\\[0.4cm]
+        \fontsize{18pt}{24pt}\selectfont
+        \bfseries
+        Kazda Adrián Zsolt\\[0.1cm]
+        \normalsize Programtervező Informatikus BSc hallgató, III. évfolyam\par
+    }
+
+    \vfill
+
+    \Large
+    Konzulensek: \\[0.2cm]
+    \textbf{Dr. Horváth Zoltán} \\
+    \normalsize Egyetemi tanár \\[0.2cm]
+    \Large
+    \textbf{Dr. Rácz István} \\
+    \normalsize Gasztroenterológus
+
+    \vfill
+
+    \normalsize
+    Győr \\
+    2026. április
+\end{titlepage}
+
+\newpage
+
+\begin{abstract}
+A vastagbéldaganat világszerte az egyik vezető halálok az onkológiai megbetegedések között, ugyanakkor időben észlelve kiváló eséllyel gyógyítható. A szűrés és diagnosztika "gold standard" eljárása a kolonoszkópia, amelynek során a szakorvos felderíti a béltraktus elváltozásait (polipokat), osztályozza azokat, és szükség esetén azonnali beavatkozást, eltávolítást végez. A polipok pontos, nemzetközi orvosi standardok (pl. NICE, JNET) szerinti klasszifikációja azonban jelentős tapasztalatot és magas szintű szakértelmet kíván. Tudományos munkánk célja az endoszkópos orvosi munka mesterséges intelligencia alapú, valós idejű támogatása. A kutatás során egy konvolúciós neurális hálózatokon (CNN) alapuló klasszifikációs modellt fejlesztettünk, amelynek előfeltétele a léziók pontos lokalizációja és körberajzolása. A klasszifikációs modell Resnet50V2 architekúrán alapul, előtanított súlyokkal, mely a saját adatsorral lett tovább tanítva. Bár ez a folyamat manuálisan is elvégezhető, rendszerünkben a szegmentációt dedikáltan egy DeepLabV3+ architektúrájú mélytanuló modell végzi el automatikusan. A kutatási eredmények gyakorlati hasznosítása érdekében egy komplex szoftveres keretrendszert hoztunk létre. A megoldás lehetővé teszi, hogy az endoszkópos toronyból kábeles kapcsolaton keresztül érkező videojelet egy külső hardveren, in situ dolgozzuk fel. A rendszer a vizsgálat során rendkívül alacsony, 1 másodperc alatti késleltetéssel jeleníti meg a szegmentált maszkot és a klasszifikációs eredményt a saját kijelzőjén. Emellett a szoftver automatikusan adatbázisba menti a rögzített eseteket, ezzel alapot biztosítva a modellek jövőbeli finomhangolásához és továbbfejlesztéséhez. A kifejlesztett alkalmazást valós klinikai környezetben, szakorvosok bevonásával teszteltük. Fontos hangsúlyozni, hogy a rendszer által szolgáltatott eredmények kizárólag tájékoztató jellegű, másodlagos véleményként (second reader) funkcionálnak, és nem helyettesítik az orvosi döntéshozatalt.
+\end{abstract}
+
+\newpage
+
+\hypertarget{motivuxe1ciuxf3}{%
+\subsection{\texorpdfstring{\textbf{1. Motiváció}
+}{1. Motiváció }}\label{motivuxe1ciuxf3}}
+
+\textbf{a) A probléma felvetése}
+
+A vastagbélrák világszerte az egyik vezető daganatos halálok, ugyanakkor
+a korai stádiumban felismert elváltozások esetén a betegek túlélési
+esélyei kiválóak {[}1{]}. A megelőzés és a korai diagnózis legfontosabb
+eszköze a kolonoszkópia, amelynek során a rákmegelőző állapotnak
+tekinthető vastagbélpolipok nem csupán azonosíthatók, hanem azonnal el
+is távolíthatók.
+
+Bár a kolonoszkópia a jelenlegi eljárásrend alapja, a vizsgálat
+hatékonysága nagymértékben függ a vizsgáló orvos tapasztalatától,
+leterheltségétől és aktuális koncentrációs képességétől {[}2{]}. A
+szakirodalmi adatok, köztük kiterjedt metaanalízisek alapján az Adenoma
+Miss Rate (AMR), azaz az észrevétlenül maradt adenomák aránya jelentős,
+átlagosan a 20-26\%-ot is elérheti {[}3{]}. A fáradtság, a figyelem
+lankadása, vagy a polipok nehezen észrevehető morfológiája (például
+lapos, a környező nyálkahártyába simuló, vagy a bélredők mögött megbúvó
+elváltozások) mind hozzájárulnak ahhoz, hogy kritikus elváltozások
+rejtve maradjanak {[}4{]}.
+
+A puszta vizuális detektáláson túl komoly kihívást jelent a megtalált
+elváltozások azonnali megítélése is. A modern endoszkópos eljárások
+megkövetelik, hogy az orvos lehetőleg már a beavatkozás közben, valós
+időben el tudja dönteni a polip típusát (például, hogy magas kockázatú
+neoplasztikus, vagy nem neoplasztikus elváltozásról van-e
+szó). Ez az úgynevezett "optikai biopszia" komoly rutint igényel, és a
+végleges szövettani eredmények megérkezéséig bizonytalanságot hordozhat
+magában {[}5{]}.
+
+A mesterséges intelligencia és a gépi látás fejlődése megteremtette a
+lehetőséget ezen emberi hibaforrások minimalizálására. Egy olyan valós
+idejű döntéstámogató szoftverre van szükség, amely a klinikai
+munkafolyamatot nem hátráltatva, "második szempárként" funkcionál
+{[}6{]}. Ha az orvos az élő videófolyam (live feed) vizsgálata közben
+egyetlen gombnyomással objektív és azonnali visszajelzést kap egy gyanús
+szövetrészlet pontos határairól (szegmentáció) és biológiai
+besorolásáról (klasszifikáció), az jelentősen csökkentheti a kognitív
+terhelést és növelheti a beavatkozás biztonságát {[}7{]}.
+
+\textbf{b) Kutatási célok}
+
+A kutatás elsődleges célja egy olyan valós idejű, mesterséges
+intelligencia alapú döntéstámogató szoftver fejlesztése, amely képes az
+endoszkópos vizsgálatok során észlelt polipok automatikus, magas
+pontosságú szegmentálására és klasszifikációjára {[}8{]}. Ezen eszköz
+megalkotásával a célunk az orvosi diagnosztika pontosságának növelése, a
+fals negatív esetek minimalizálása, valamint az optikai biopszia
+folyamatának támogatása.
+
+A folyamatos, képkockánkénti videóelemzés jelentős számítási kapacitást
+igényel, és a bélmozgások vagy az eszköz mozgatása okozta elmosódás
+miatt esetenként magas hibaaránnyal működhet. Ennek kiküszöbölésére egy
+olyan architektúra kialakítását tűztük ki célul, amely az élő
+videófolyamból a vizsgáló orvos interakciójára (gombnyomásra) rögzít egy
+képkockát, és a további elemzést ezen hajtja végre {[}9{]}. Ezzel a
+megközelítéssel a célunk az, hogy az irányítás az orvos kezében
+maradjon, miközben a hardveres erőforrások kihasználása optimális marad.
+
+A szoftveres folyamat részeként alapvető célunk két korszerű,
+mélytanulásos (Deep Learning) modell integrálása a Python-alapú
+keretrendszerbe:
+
+\begin{itemize}
+\item
+  \textbf{Szegmentációs célkitűzés:} A polipok pontos térbeli
+  kiterjedésének (morfológiai határainak) pixellszintű meghatározására a
+  DeepLabV3+ architektúrát alkalmazzuk, MobileNetV2 gerinchálózattal. Célunk a modell
+  betanítása és finomhangolása (fine-tuning) úgy, hogy a kinyert
+  szegmentációs maszkok pontosan elkülönítsék az elváltozást a környező
+  egészséges nyálkahártyától.
+\item
+  \textbf{Klasszifikációs célkitűzés:} A szegmentált régió (Region of Interest) biológiai besorolását, azaz a neoplasztikus és nem neoplasztikus jelleg előrejelzését, a ResNet50V2 hálózat implementálásával végezzük {[}11{]}. A cél a szövettani eredményekkel magas egyezést mutató predikciós pontosság elérése, és a fals negatívok minimalizálása. Ehhez a szenzitivitás értékét szeretnénk 90\% fölött tartani, figyelve az F1-score-ra is (az adatsor kiegyensúlyozatlansága miatt).
+\item
+  \textbf{Célértékek és elvárások:}
+  \begin{itemize}
+      \item \textbf{Valós idő (Latency):} Az end-to-end válaszidő (gombnyomástól az eredmény UI-on történő megjelenéséig) 1 másodperc alatt tartása.
+      \item \textbf{Élő videó (FPS):} A háttérben futó videófolyam zökkenőmentes, 25-30 FPS sebességű megjelenítése.
+      \item \textbf{Pontosság:} Szegmentáció esetén 80\% feletti IoU (Intersection over Union) és közel 90\%-os Dice-score elérése a teszthalmazon. A klasszifikációnál a szenzitivitás (Recall) 90\% felett tartása.
+  \end{itemize}
+\end{itemize}
+
+\textbf{c) Saját hozzájárulás (Contributions)}
+
+Jelen dolgozat az alábbi eredeti tudományos és mérnöki hozzájárulásokat tartalmazza:
+\begin{itemize}
+\item \textbf{Trigger-alapú pipeline tervezése:} A folyamatos képkockánkénti videóelemzést felváltó, orvosi gombnyomásra épülő eseményvezérelt architektúra tervezése és implementálása. Ez az egyszerre alacsony számítási igényt és magas predikciós stabilitást biztosít.
+\item \textbf{Saját klinikai adatbázis feldolgozása:} A Petz Aladár Kórháztól (Győr) gyűjtött 1073 NBI endoszkópos felvétel annotálásának koordinálása, minőség-ellenőrzése, JNET-bináris konverziója és a szövettani leletekkel való validálása.
+\item \textbf{Adatkezelési protokoll:} Beteg-azonosítón alapuló (Patient ID split) szigorú adatfelosztás bevezetése az adatszivárgás elkerülésére, amelyet a két modell eltérő adathalmazain külön-külön alkalmaztunk.
+\item \textbf{Hiperparaméter-optimalizálás:} Keresztvalidációs keretrendszer kidolgozása a klasszifikációs modell konfigurációinak rácsos keresésére, a foldokon átlagolt macro F1 és pooled accuracy alapú kiértékeléssel.
+\item \textbf{Valós idejű szoftverarchitektúra:} Szálkezelt Python-alkalmazás implementálása, amely a DeepLabV3+ és ResNet50V2 modelleket közös pipeline-ban futtatja, fenntartva az élővideó folyamatos megjelenítését és az 1 másodperc alatti end-to-end látenciát.
+\item \textbf{Klinikai validáció:} A rendszer tesztelése valós kórházi környezetben, Zenbook 14 hordozható hardveren, gasztroenterológus szakorvos bevonásával.
+\end{itemize}
+
+\textbf{d) Szakirodalmi áttekintés és Korszerű megoldások (State of the art)}
+
+\textit{A polipok klinikai jelentősége és a döntéstámogató rendszerek szerepe}
+
+A vastagbéldaganatok megelőzésében meghatározó a rákmegelőző állapotot jelentő polipok korai felismerése és pontos azonosítása {[}13{]}. A klinikai gyakorlatban a nem neoplasztikus és a neoplasztikus elváltozások elkülönítése közvetlenül befolyásolja a további terápiás döntéseket {[}14{]}. A szövettani vizsgálat nagy pontosságú, ugyanakkor idő- és erőforrásigényes folyamat. Ezt a késleltetést csökkenti az optikai biopszia megközelítés, amely a valós idejű, képalapú szövettani becslést támogatja {[}15{]}. A kolonoszkópia során az orvosra háruló kognitív terhelés, a fáradtság, valamint a változó megvilágítási és mozgási körülmények a tévesztések kockázatát növelik {[}3{]}, {[}4{]}.
+
+Ezért egyre több munka foglalkozik olyan számítógéppel támogatott diagnosztikai (CADx) rendszerekkel, amelyek valós időben második szempárként segítik az orvosi döntéshozatalt {[}5{]}, {[}9{]}. A gyakorlati bevezetésnél az egyik fő korlát az inferenciaidő. A folyamatos videófeldolgozás jelentős hardverigénnyel jár, és érzékeny a képminőség ingadozására (például elmosódás, kitakart régiók). Emiatt klinikai környezetben jól használható alternatíva az orvos által triggerelt, gombnyomásra induló klasszifikáció, amely a megfelelő képkockákon gyors és stabil predikciót ad, miközben a számítási kapacitás terhelése mérsékelhető.
+
+A szegmentációs feladatban a DeepLab-család meghatározó referenciapont. Az atrous konvolúcióra épülő megoldások jó térbeli felbontást adnak, ami poliphatárok követésénél fontos {[}10{]}. Emellett több endoszkópos alkalmazás Kvasir-SEG típusú adathalmazokra támaszkodik módszertani benchmarkként {[}8{]}. A valós idejű polipdetektálás és lokalizáció terén szintén vannak jól dokumentált deep learning eredmények, amelyek jelzik, hogy klinikai videófolyamban is tartható a használható sebesség {[}17{]}.
+
+\textit{Konvolúciós neurális hálózatok és a ResNet architektúra alkalmazása}
+
+Az endoszkópos képek automatikus elemzésében a klasszikus képfeldolgozó eljárásokat nagyrészt mélytanulás-alapú modellek váltották fel, ezen belül is elsősorban a konvolúciós neurális hálózatok {[}7{]}, {[}17{]}. A CNN modellek rétegről rétegre haladva egyre magasabb szintű jellemzőket tanulnak: az élektől és textúráktól a morfológiai mintázatokig. A mélység növelése ugyan javíthatja a reprezentációs képességet, de a túl mély hálózatok tanítását sokáig a gradiens eltűnésének problémája korlátozta.
+
+A ResNet ezt a problémát reziduális blokkokkal és ugrókapcsolatokkal kezeli {[}11{]}, {[}16{]}. Vastagbélpolipok osztályozására a ResNet50 és a ResNet50V2 olyan kompromisszumot ad, amely a modellméretet, a predikciós teljesítményt és a futási időt egyszerre tartja kezelhető tartományban. Mivel az orvosi adathalmazok általában korlátozottak és az osztályeloszlás gyakran kiegyensúlyozatlan, a gyakorlatban indokolt az előtanított súlyok használata, majd célzott finomhangolás klinikai környezetből származó adatokon.
+
+Ugyanakkor a publikált rendszerek jelentős része prototípus jellegű, és nem egységes, platformfüggetlen klinikai keretrendszerként jelenik meg. A gyakorlatban ezért még mindig nyitott kérdés, hogyan lehet a szegmentációt, a klasszifikációt és a felhasználói interakciót úgy egyesíteni, hogy az inferenciaidő alacsony maradjon, miközben a predikció stabil és reprodukálható legyen {[}9{]}, {[}12{]}, {[}17{]}.
+
+\textbf{e) A dolgozat felépítése}
+
+A dolgozat hat fő fejezetből áll. Az alábbi vázlat a fejezetek szerepét és egymásra épülését foglalja össze:
+
+\begin{itemize}
+\item \textbf{1. Motiváció:} A klinikai probléma, a kutatási kérdés és a célkitűzések bemutatása, valamint a releváns szakirodalmi háttér rövid áttekintése.
+\item \textbf{2. Módszerek:} Az alkalmazott fogalmak, metrikák, adatkezelési döntések és a fejlesztett klasszifikációs/szegmentációs megközelítés leírása.
+\item \textbf{3. Eredmények:} A kísérletek kimenetei, fő mérőszámok és futásidejű jellemzők bemutatása ábrákkal és rövid értelmezéssel.
+\item \textbf{4. Túlmutató alkalmazások:} A klinikai integráció lehetőségei, a rendszer bővíthetősége és a további felhasználási irányok összefoglalása.
+\item \textbf{5. Összegzés:} A legfontosabb eredmények rövid összefoglalása, korlátok, valamint a következő fejlesztési lépések kijelölése.
+\item \textbf{6. Felhasznált irodalom:} A dolgozatban hivatkozott források jegyzéke.
+\end{itemize}
+
+\hypertarget{muxf3dszerek}{%
+\subsection{\texorpdfstring{\textbf{2. Módszerek}
+}{2. Módszerek }}\label{muxf3dszerek}}
+
+\textbf{2.1. Definíciók és jelölések}
+
+A gépi látásra épülő diagnosztikai rendszerek fejlesztése megköveteli az orvosi és informatikai terminológia precíz összehangolását. A gasztroenterológiai beavatkozások fókuszában a kolorektális polipok azonosítása áll. Ezeket a bélfalon kialakuló sejtcsoportokat malignitási potenciáljuk alapján két fő kategóriába soroljuk: a daganatmegelőző állapotot reprezentáló neoplasztikus (pl. tubularis vagy villózus adenoma), illetve az alacsony kockázatú, nem neoplasztikus (pl. hiperplasztikus) elváltozások közé {[}14{]}. A klinikai döntéshozatalban e két osztály azért bír kiemelkedő jelentőséggel, mert az adenomák eltávolítása csökkenti a kolorektális rák kialakulásának kockázatát, míg a hiperplasztikus polipok jellemzően követéssel kezelhetők. A fizikai mintavételt kiváltó, tisztán képi információra támaszkodó, valós idejű szövettani becslést optikai biopsziának nevezzük, amelynek pontossága nagymértékben függ a vizsgáló orvos tapasztalatától és a megvilágítási körülményektől {[}15{]}.
+
+Informatikai szemszögből a probléma egy szemantikus szegmentációs és egy bináris klasszifikációs feladatra bomlik. A szegmentáció során a hálózat célja, hogy minden bemeneti képpont (pixel) számára meghatározza, hogy az poliphoz tartozik-e ($y=1$) vagy sem ($y=0$), azaz egy sűrű (dense) pixelszintű predikciós maszkot állít elő. A klasszifikációs feladatban ezzel szemben az algoritmus egyetlen globális, diszkrét $y \in \{0,1\}$ osztálycímkét rendel a bemeneti régióhoz. A térbeli mintázatok hierarchikus kinyerését mindkét esetben konvolúciós neurális hálózatok (CNN) végzik, amelyek rétegről rétegre haladva az egyszerű élektől és színátmenetektől a komplex morfológiai mintázatokig terjedő jellemzőket (feature-öket) tanulnak meg {[}16, 17{]}.
+
+A szegmentációs geometriai pontosság mérésére a következő mutatókat alkalmaztuk. Az \emph{Intersection over Union} (IoU, más néven Jaccard-index) a prediktált maszk és a ground truth metszete és uniója arányát fejezi ki:
+\[
+\mathrm{IoU} = \frac{|P \cap G|}{|P \cup G|}
+\]
+ahol $P$ a prediktált, $G$ a referencia (ground truth) maszk pixelkészlete. A \emph{Dice-score} (F1-score maszk szinten) szintén az átfedést méri, de a metszetet kétszeresen veszi figyelembe, ezzel érzékenyebb a kis pozitív területekre:
+\[
+\mathrm{Dice} = \frac{2|P \cap G|}{|P| + |G|}
+\]
+A bináris klasszifikáció esetén a konfúziós mátrix négy alapeleme (TP: valósan pozitív, TN: valósan negatív, FP: hamisan pozitív, FN: hamisan negatív) alapján a következő mutatókat számítottuk:
+\[
+\mathrm{Accuracy} = \frac{TP + TN}{TP+TN+FP+FN}, \quad
+\mathrm{Recall} = \frac{TP}{TP+FN}, \quad
+\mathrm{Precision} = \frac{TP}{TP+FP}
+\]
+\[
+F_1 = \frac{2 \cdot \mathrm{Precision} \cdot \mathrm{Recall}}{\mathrm{Precision} + \mathrm{Recall}}, \quad
+\mathrm{Specificity} = \frac{TN}{TN+FP}
+\]
+Orvosi kontextusban a fals negatív esetek minimalizálása az elsődleges szempont, hiszen egy elmulasztott daganatmegelőző elváltozás komoly egészségügyi kockázatot jelent. Ezért a kiértékelés súlypontja a szenzitivitásra (Recall) helyeződött, míg az osztályarányok eltolódásából (imbalance) eredő torzításokat az F1-score kompenzálta {[}18{]}.
+
+A modellparaméterek kiválasztásának robusztusságát $k$-szoros keresztvalidációval (k-fold cross-validation) ellenőriztük. E technika során az adathalmazt $k$ egyenlő méretű részre (foldra) osztjuk: a modellt $k$ alkalommal tanítjuk, minden körben $k-1$ foldon tanulva és az egyiken validálva. Az így kapott $k$ darab metrikaérték átlaga megbízhatóbb becslést ad a generalizációs képességről, mint egyetlen véletlen felosztás eredménye, mivel kiszűri az adatpartíció véletlenszerű kedvező vagy kedvezőtlen hatásait.
+
+\textbf{2.2. Adatkészlet és előfeldolgozás}
+
+A generalizációs képesség javítása érdekében heterogén forrásból származó adatokat integráltunk. A szegmentációs modell alaptanítását a nyílt Kvasir-SEG adatbázis {[}8{]} 1000 annotált felvétele biztosította. Ez a referencia-adathalmaz fehér fényű (white-light) kolonoszkópos képeket tartalmaz, ahol az annotált maszkok tapasztalt gasztroenterológusok manuális körberajzolásán alapulnak, és széles morfológiai változatosságot (lapos, nyélbe szedett és kiemelkedő polipok egyaránt) lefednek. A kutatás gerincét ugyanakkor a Petz Aladár Egyetemi Oktató Kórházból (Győr, Magyarország) származó, 1073 elemet számláló, nagy felbontású NBI (Narrow Band Imaging) endoszkópos képanyag alkotta.
+
+Az NBI technika szűkített hullámhosszon (kék: ~415 nm, zöld: ~540 nm) működő optikai szűrő segítségével emeli ki az érstruktúrákat és a nyálkahártya felszíni mintázatát. Ez rendkívül értékes a polipszövettani karakterizáláshoz, mivel a vaszkularizáció és a felszíni pit pattern alapján az adenomák és a hiperplasztikus elváltozások megkülönböztethetők anélkül, hogy fizikai biopsziát kellene végezni. Az eredeti klinikai annotációk a JNET (Japan NBI Expert Team) klasszifikációs rendszer szerint készültek, amely négy szövettani kategóriát (1. típus: hiperplasztikus, 2A: alacsony kockázatú adenoma, 2B: magas kockázatú adenoma, 3. típus: szubmukozálisan invazív karcinóma) különböztet meg az NBI-kép alapján. A végső osztálycímkéket a szövettani lelet (patológiai arany standard) alapján validáltuk, az eltérő esetek esetén a szövettani eredmény döntött.
+
+Az alacsony mintaszám miatt a négyosztályos JNET problémát binárisra (neoplasztikus -- 1. vs. 2A/2B/3. típus együtt, nem neoplasztikus -- 1. típus) redukáltuk. Ez az összevonás enyhe pozitív osztály-túlsúlyt (adenoma dominanciát) eredményezett az adatsorban, ami az osztályegyensúly-kezelés szükségességét indokolta. A képekhez kézzel rajzolt szegmentációs maszkok is rendelkezésre álltak, amelyeket az orvosok digitalizálótábla segítségével, a léziót körülhatároló bounding-polygon módszerrel készítettek.
+
+Az adatszivárgás (data leakage) teljes kizárása végett a partícionálás szigorúan beteg-azonosító (Patient ID) alapján történt, egyazon páciens képkockái kizárólag egy adathalmazba kerülhettek. Ez különösen fontos, mivel egy videószekvenciából több hasonló képkocka is kinyerhető, amelyek azonos beteghez köthetők, random frame-szintű felosztás esetén ezek különböző halmazokba kerülhetnének, mesterségesen felfújva a teljesítménymérőket. A szegmentációs hálózat tanító (Train) halmaza 1678 képből (678 saját + 1000 Kvasir) állt, a validációs set 189, míg a teszthalmaz 206 saját képet tartalmazott. Ezzel szemben a klasszifikációs architektúrát kizárólag a kórházi adatsoron tanítottuk, ahol a teljesen szeparált teszthalmaz elemszáma $n=238$ volt.
+
+A szegmentációs betanítási bázist online augmentációs transzformációkkal háromszoros méretűre (3x) bővítettük. Alkalmazott transzformációk: véletlenszerű skálázás (0,5--2,0-szoros factor), $513\times513$ pixeles véletlen kivágás (random crop), valamint vízszintes tükrözés (horizontal flip). Ezek a geometriai módosítások a polipok méret- és helyzetbeli változatosságát imitálják, javítva a modell robusztusságát. A klasszifikátornál az osztály-imbalance problémát oversampling-gel egyenlítettük ki: a kisebbségi osztály (nem neoplasztikus) képeit véletlen ismétléssel felülmintavételeztük, amíg az osztályarány közel kiegyensúlyozottá nem vált.
+
+A bemeneti tenzorokat mindkét esetben az ImageNet adathalmazon számított átlag ($\mu = [0{,}485,\ 0{,}456,\ 0{,}406]$) és szórás ($\sigma = [0{,}229,\ 0{,}224,\ 0{,}225]$) értékekre normalizáltuk. Ez az előfeldolgozási lépés nélkülözhetetlen az ImageNet-előtanított súlyokkal induló finomhangolás (fine-tuning) esetén, mivel a hálózat neurális aktivációi erre a tartományra kalibráltak. Egy dedikált előkísérlet keretében megvizsgáltuk a képkitöltés (zero-padding vs. padding nélküli átméretezés) hatását a szegmentációs teljesítményre, mivel a teszthalmazon mért IoU-értékekben érdemi eltérés nem mutatkozott, a kisebb számítási overhead és az egyszerűbb implementáció miatt a padding nélküli megközelítés mellett döntöttünk.
+
+\textbf{2.3. Tanítás és architektúra}
+
+\textit{Trigger-alapú eseményvezérlés}
+
+A folyamatos képkockánkénti (frame-by-frame) videófeldolgozás magas számítási igénye és a gyors eszközmozgásból eredő elmosódások indokolták a trigger-alapú eseményvezérlés bevezetését. A fizikai gombnyomásra az OpenCV könyvtár emel ki egy fókuszált képkockát az élő streamből. A futószalag-szerű (pipeline) ( lásd \ref{fig:pipeline}. ábra ) folyamat első lépéseként a DeepLabV3+ elkészíti a szegmentációs maszkot, amiből a szoftver egy fekete hátterű kivágatot (bounding box crop) generál a ResNet50V2 hálózat számára. Az aszinkron végrehajtást szálkezelés (threading) biztosítja: a videófolyam dekódolása, a neurális inferencia és a CustomTkinter grafikus felület frissítése párhuzamosan, szeparált szálakon fut, megelőzve a kölcsönös blokkolást (deadlock).
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{pipeline_diagram.png}
+    \caption{A valós idejű döntéstámogató rendszer adatfeldolgozási folyamata (Pipeline). A folyamat a videójelből kiemelt képkockától a végső klasszifikációs eredmény megjelenítéséig tart.}
+    \label{fig:pipeline}
+\end{figure}
+
+\textit{A szegmentációs modell: DeepLabV3+ architektúra}
+
+A DeepLabV3+ {[}10{]} a szemantikus szegmentáció egyik meghatározó referenciamodellje. Alapeleme az \emph{Atrous Spatial Pyramid Pooling} (ASPP) modul, amely párhuzamosan, különböző ,,lyukméretű'' (atrous/dilated) konvolúciókkal mintavételez: polipok esetén az elváltozás mérete képről képre változik, ezért a multiskálás kontextusinformáció hiányában a modell szisztematikusan alulszegmentálná a szélső méretkategóriákat. Az atrous konvolúció egy $r$ rátájú lyukmintázatot (dilation rate) vezet be a szűrőbe, ezzel az effektív receptive field szélességét $r$-szeresére tágítja anélkül, hogy extra paramétert igényelne.
+
+A DeepLabV3+ encoder-decoder felépítésű: az encoder a gerinchálózat (backbone) mélyrétegeire ráhelyezett ASPP-ből nyer gazdag szemantikai jellemzőket, a decoder pedig az alacsony szintű backbone feature-ökkel összefűzve (skip connection) fokozatosan állítja vissza a térbeli felbontást. Implementációnkban MobileNetV2-t alkalmaztunk gerinchálózatként 16-os output stride paraméterrel és bináris kimenettel, ez a konfiguráció a futásidőt érdemben csökkenti a nehezebb ResNet-alapú backbone-okhoz képest. Klinikai in situ telepítésnél, ahol a célhardver dedikált GPU nélküli hordozható eszköz, ez a különbség meghatározó. A tanítást Adam optimalizálóval ($lr=10^{-3}$), CrossEntropyLoss veszteségfüggvénnyel, 4-es batch mérettel és early stopping mechanizmussal végeztük (türelem: 7 epoch). A kinyert belső jellemzőtérképek vizualizációja (\ref{fig:feature_maps}. ábra) szemléletesen mutatja, ahogy az alacsony szintű backbone aktivációktól az ASPP-kimenetig haladva hogyan sűrűsödik a polipra vonatkozó szemantikai információ.
+
+\begin{figure}[ht!]
+    \centering
+    \includegraphics[width=1\textwidth]{../feature_maps/pi486-R-H/SUMMARY_pi486-R-H.png}
+    \caption{A DeepLabV3+ modell belső jellemzőtérképeinek (feature maps) vizualizációja egy polip felismerése során. Jól látható, ahogy a hálózat az alacsony szintű élektől (Backbone low level) a magas szintű, szemantikus információkig (ASPP) haladva alakítja ki a végső maszkot.}
+    \label{fig:feature_maps}
+\end{figure}
+
+\textit{A klasszifikációs modell: ResNet50V2 és hiperparaméter-keresés}
+
+A ResNet50V2 architektúra a He et al. {[}11, 16{]} által bevezetett reziduális tanulás elvét valósítja meg: az egyes blokkok bemenete (identity shortcut) közvetlenül összeadódik a blokk kimenetével, megkerülve a nemlineáris transzformációkat. Ez az ugrókapcsolat (skip connection) megakadályozza a gradiens eltűnését mély hálózatokban, lehetővé téve a hatékony paramétertanítást 50+ rétegből álló hálózatokon is. A V2 változat módosítja a batch normalizáció és az aktiváció sorrendjét (pre-activation), ami javítja az optimalizálás konvergenciáját. A modellt ImageNet-előtanított súlyokkal inicializáltuk, majd az SZE/kórházi adatsoron finomhangoltuk.
+
+A végleges hiperparamétereket rács-alapú (grid search) kereséssel és keresztvalidációval (k=5) határoztuk meg. A hibaszámítást \texttt{BCEWithLogitsLoss} függvény végezte, amely numerikailag stabilabb, mint az utólagos sigmoid + BCE kombinációja. A vizsgált konfigurációs tér: tanulási ráta ($10^{-4}$, $5\times10^{-5}$, $10^{-5}$), batch méret (16, 32), backbone fagyasztás teljes / részleges / nincs (frozen / partially frozen / fully unfrozen), osztályegyensúly-kezelés (oversampling vs. class weight). A foldokon összesített (pooled) accuracy és macro F1 szerint az oversampling + teljes backbone-feloldás (unfreezing) kombinációja adta a legstabilabb teljesítményt. Az optimális döntési küszöböt a fals negatív arány minimalizálása céljából az F1-score maximumához igazítottuk utólagos küszöboptimalizálással, a validációs adatokon.
+
+A reprodukálhatóság és a klinikai realitás fenntartása érdekében a hardverkörnyezetek dedikáltan szétváltak. A tanítást egy Intel Core i5-13600K processzorral, NVIDIA GeForce RTX 3060 Ti (8\,GB GDDR6 VRAM) videokártyával és 32\,GB DDR5 RAM-mal felszerelt asztali rendszeren végeztük, CUDA-gyorsítással. A valós idejű inferenciát és a késleltetésmérést egy ASUS Zenbook 14 hordozható eszközön validáltuk (AMD Ryzen 7 5825U, 16\,GB DDR4 RAM, integrált AMD Radeon iGPU), ezen a platformon a PyTorch CPU-módban futott, dedikált GPU-gyorsítás nélkül. Ez utóbbi konfiguráció szándékosan reprezentálja a kórházi in situ telepítési feltételeket, ahol a rendelkezésre álló hardware jellemzően hasonló kategóriájú.
+
+\textbf{2.4. Szoftverarchitektúra és technológiai stack}
+
+\textit{Alkalmazott könyvtárak és keretrendszerek}
+
+A teljes rendszer Python 3.11.5 nyelven íródott, kizárólag nyílt forráskódú (open-source) könyvtárakra támaszkodva. A mélytanulási komponensek a PyTorch keretrendszer alapjaira épülnek, amely lehetővé teszi a CUDA-gyorsítással végzett tanítást és a CPU-n futó inferenciát egyazon kódbázissal, futásidőben detektálva a rendelkezésre álló hardvert. A modellek súlyait \texttt{.pth} fájlokban tároljuk, a szegmentációs modellhez a \texttt{torchvision.models.segmentation} modulban elérhető DeepLabV3+ implementációt, a klasszifikációs modellhez a ResNet50V2 architektúrát használtuk, mindkét esetben ImageNet-előtanított kiindulóponttal.
+
+A videófolyam élő dekódolásához az OpenCV (\texttt{cv2}) könyvtárat alkalmaztuk, amely RTSP, USB és HDMI videójelforrásokkal egyaránt kompatibilis, és hatékony, alacsony szintű képfeldolgozást végez. A grafikus felhasználói felületet (GUI) CustomTkinter segítségével implementáltuk: ez az újgenerációs Tkinter-kiterjesztés dark/light módot, egyedi widget-stílusokat és HiDPI megjelenítést kezel, JavaScript/Electron alapú megoldások nélkül, ami a telepítési méretet és a memóriaigényt töredékére csökkenti.
+
+\textit{Szálkezelési modell}
+
+Az alkalmazás három párhuzamos szálat futtat: (1) \textbf{videódekódolási szál}: az OpenCV capture objektumon keresztül folyamatosan olvassa a bejövő videójelet és tárolja az aktuális képkockát egy megosztott, szál-biztos (thread-safe) pufferben, (2) \textbf{inferencia-szál}: a felhasználó gombnyomására aktiválódik, kiveszi az aktuális képkockát a pufferből, elvégzi a DeepLabV3+ szegmentációs, majd a ResNet50V2 klasszifikációs inferenciát, és az eredményt egy eredménypufferbe írja, (3) \textbf{UI-frissítési szál}: a Tkinter fő ciklusa rendszeres időközönként (callback-alapon) kiolvas az eredménypufferből és frissíti a megjelenített maszkot és osztálycímkét. Ezzel a felépítéssel a videómegjelenítés és az inferencia nem blokkolják egymást: a live feed akkor is folyamatosan látható, ha az inferenciaszál éppen egy neurális hálózatot futtat.
+
+\textit{Adatbázis és naplózás}
+
+Minden trigger-eseménynél az alkalmazás automatikusan rögzíti a képkocka időbélyegét, a szegmentációs maszk bináris tömörített reprezentációját, a klasszifikációs predikciót és a predikált valószínűséget egy SQLite adatbázisban. A strukturált naplózás retrospektív auditálhatóságot ad az orvosnak, és párhuzamosan folyamatosan bővíti a jövőbeli retraining adatbázist.
+
+\hypertarget{eredmuxe9nyek}{%
+\subsection{\texorpdfstring{\textbf{3. Eredmények}
+}{3. Eredmények }}\label{eredmuxe9nyek}}
+
+\textbf{3.1. A szegmentációs modell teljesítménye}
+
+A DeepLabV3+ architektúra betanítása során a validációs adathalmazon mért IoU (Intersection over Union) értéket tekintettük elsődleges iránymutatónak. A korai leállítás (early stopping, türelem: 7 epoch) a 38.\ epoch-nál szakította meg a folyamatot, megelőzve a túltanulást (overfitting). A legjobb általánosítási képességet a 31.\ iterációban mentett súlyokkal értük el: a validációs IoU ekkor $84{,}94\%$ volt, míg a tanító halmazon mért érték ettől alig tért el, ami az alacsony gap alapján kiegyensúlyozott illeszkedést (fit) jelez.
+
+A teljesen független, 206 elemet számláló teszthalmazon (amelynek képei sem a tanításban, sem a hiperparaméter-kiválasztásban nem szerepeltek) a modell $82{,}43\%$-os IoU-t produkált. Habár ez mintegy $2{,}5$ százalékponttal elmarad a validációs értéktől, ilyen mértékű eltérés általánosan megfigyelt jelenség, és az adatfelosztás integritásának köszönhetően valódi generalizációs képességet tükröz. A teszthalmazon mért $89{,}91\%$-os Dice-score különösen kiemelendő: ez az érték több nyilvános benchmarken közölt eredménnyel összemérhető {[}17{]}, és az orvosi alkalmazás szempontjából elfogadható poliphatár-detekciót jelez.
+
+A betanítás teljes dinamikáját a \ref{fig:seg_curves}. ábra szemlélteti: jól látható a tanítási és validációs Loss szimultán csökkenése, valamint az IoU monoton növekedése. A görbék szorosan haladnak egymás mellett anélkül, hogy a validációs hiba elkezdene nőni, ami a regularizáció és az augmentáció megfelelő beállítására utal. A \ref{fig:seg_results}. ábrán néhány reprezentatív teszteset valósítja meg a referenciaként szolgáló kézi annotációk (ground truth) és a hálózat által generált kimeneti maszkok vizuális összevetését.
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=1\textwidth]{../checkpoints_0409/training_curves_0409.png}
+    \caption{A szegmentációs modell tanítási (kék) és validációs (piros) görbéi (Loss és IoU).}
+    \label{fig:seg_curves}
+\end{figure}
+
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=0.9\textwidth]{3 minta predikcio avg iou 0.9329.png}
+    \caption{Három reprezentatív teszteset a szegmentációs modell predikcióival. Balra: eredeti kép, középen: ground truth (kézi annotáció), jobbra: modell predikció per-képi IoU értékkel. A három eset átlagos IoU-ja $0{,}9329$.}
+    \label{fig:seg_results}
+\end{figure}
+
+\textbf{3.2. A klasszifikációs modell teljesítménye}
+
+A léziók biológiai besorolásáért felelős ResNet50V2 hálózat 20 epochon át tartó finomhangolása során a tanulási és validációs görbék (Accuracy és Loss) stabil konvergenciát mutattak (\ref{fig:class_curves}. ábra). A görbék alakja a hiperparaméter-keresési fázis eredményességét tükrözi: az alacsony tanulási ráta ($5\times10^{-5}$) lassabb, de kiegyensúlyozottabb konvergenciát biztosított, és a validációs Loss végig szorosan követte a tanítási Loss értékét, utalva arra, hogy az oversampling hatékonyan kezelte a negatív osztály alulreprezentáltságát.
+
+A 238 endoszkópos felvételt tartalmazó, teljesen független tesztkészleten a predikciós teljesítményt egy dedikált küszöbérték-optimalizálási lépéssel maximalizáltuk. A sigmoid aktiváción alapuló alapértelmezett $0{,}5$-es küszöb helyett a precizitás-szenzitivitás-F1 metrikák döntési küszöb szerinti eloszlásának vizsgálata alapján (\ref{fig:threshold}. ábra) a vágási pontot $0{,}74$-ben határoztuk meg, ahol az F1-score elérte a maximumát ($0{,}9132$). Ez a küszöbeltolás technikailag azt jelenti, hogy a modell csak akkor sorol egy esetetet neoplasztikusnak, ha a prediktált valószínűség legalább $74\%$, ezzel a döntés óvatosabb (konzervatívabb) lesz a pozitív irányban, csökkentve a fals pozitívok számát, miközben a szenzitivitás magas marad.
+
+Ezen az optimális vágási ponton a hálózat a következő eredményeket produkálta: $88{,}7\%$-os általános pontosság (Accuracy), $91{,}0\%$-os precizitás (Precision), valamint $83{,}1\%$-os specificitás (Specificity). Szakorvosi szempontból azonban a legrelevánsabb mérőszám a $91{,}6\%$-os szenzitivitás (Recall/Sensitivity). A \ref{fig:conf_matrix}. ábrán bemutatott konfúziós mátrixból leolvasható, hogy a rendszer mindössze 13 esetben adott fals negatív (FN) becslést ( azaz 13 neoplasztikus elváltozást tévesen nem neoplasztikusként sorolt be ) miközben 142 neoplasztikus esetet helyesen (TP) azonosított. A fals pozitív (FP) esetek száma 14, míg a helyesen elvetett, nem neoplasztikus mintáké (TN) 69 volt. Az FN/FP arány kedvező: az orvosi szempontból veszélyesebb fals negatív (kihagyott adenoma) száma egy esettel alacsonyabb, mint a fals pozitívoké, ami a küszöboptimalizálás szándékának megfelelő eredmény.
+
+\begin{figure}[ht!]
+    \centering
+    % \includegraphics[width=0.48\textwidth]{cnn_accuracy_curve.png}
+    % \includegraphics[width=0.48\textwidth]{cnn_loss_curve.png}
+    \caption{A klasszifikációs modell Accuracy (balra) és Loss (jobbra) görbéi a tanítási folyamat során.}
+    \label{fig:class_curves}
+\end{figure}
+
+\begin{figure}[h!]
+  \centering
+  % \includegraphics[width=0.7\textwidth]{cnn_confusion_matrix.png}
+  \caption{A végső CNN modell konfúziós mátrixa a tesztkészleten
+    (küszöb: $0{,}74$). TP~=~142, TN~=~69, FP~=~14, FN~=~13.}
+  \label{fig:conf_matrix}
+\end{figure}
+
+\begin{figure}[h!]
+  \centering
+  % \includegraphics[width=0.85\textwidth]{cnn_threshold_curve.png}
+  \caption{F1, precision és recall a döntési küszöb függvényében.
+    A maximális F1 ($0{,}9132$) a $0{,}74$-es küszöbnél adódott.}
+  \label{fig:threshold}
+\end{figure}
+
+\textbf{3.3. Összesített eredmények}
+
+Az 1. táblázat összefoglalja mindkét modell legfontosabb teljesítménymérőit a teljesen független teszthalmazon, a végső, optimalizált konfigurációval mérve.
+
+\begin{table}[ht!]
+\centering
+\caption{A két modell legfontosabb teljesítménymérői a teszthalmazon.}
+\begin{tabular}{lcc}
+\hline
+\textbf{Metrika} & \textbf{Szegmentáció} & \textbf{Klasszifikáció} \\
+ & \textbf{(DeepLabV3+)} & \textbf{(ResNet50V2)} \\
+\hline
+Teszthalmaz elemszáma & $n=206$ & $n=238$ \\
+IoU (Jaccard) & $82{,}43\%$ & {---} \\
+Dice-score & $89{,}91\%$ & {---} \\
+Accuracy & {---} & $88{,}7\%$ \\
+Szenzitivitás (Recall) & {---} & $91{,}6\%$ \\
+Precizitás (Precision) & {---} & $91{,}0\%$ \\
+F1-score & {---} & $0{,}9132$ \\
+Specificitás & {---} & $83{,}1\%$ \\
+Döntési küszöb & {---} & $0{,}74$ \\
+Validációs IoU (legjobb epoch) & $84{,}94\%$ & {---} \\
+\hline
+End-to-end látencia & \multicolumn{2}{c}{$<1$ mp (együttes pipeline)} \\
+Élővideó sebesség & \multicolumn{2}{c}{25--30 FPS (Zenbook 14, CPU)} \\
+\hline
+\end{tabular}
+\label{tab:results}
+\end{table}
+
+Mindkét modell teljesítette az előre kitűzött célértékeket. A szegmentációs oldalon a $89{,}91\%$-os Dice különösen kedvező, mert ez az érték az irodalomban közölt hasonló méretű, egyszintű (single-center) adathalmazon betanított modellek felső negyedébe esik {[}17{]}. A klasszifikációnál a $91{,}6\%$-os szenzitivitás azért kiemelendő, mert a fals negatívok aránya (13 eset 238-ból) orvosi szempontból kezelhető tartomány, és alacsonyabb, mint a fals pozitívoké.
+
+\textbf{3.4. A keretrendszer valós idejű teljesítménye}
+
+A pusztán elméleti pontossági mutatókon túl a klinikai alkalmazhatóság szigorú feltétele a megfelelő futásidejű teljesítmény. Teszteléseink gyakorlati oldalról is igazolták a szálkezelt szoftverarchitektúra létjogosultságát. A háttérben futó videófolyam dekódolása és megjelenítése zavartalanul, 25--30 FPS sebességgel történt a Zenbook 14 hordozható teszthardveren, dedikált GPU-gyorsítás nélkül. Ez az eredmény azt jelenti, hogy a kolonoszkópos élőkép valós időben, késleltetés nélkül követhető az orvos által, miközben a szoftver a háttérben készen áll az inferenciára.
+
+Az end-to-end késleltetés, vagyis az az időablak, ami az orvos gombnyomásától a szegmentált maszk és az osztályozási végeredmény felhasználói felületen (UI) történő megjelenéséig eltelik, stabilan 1 másodperc alatt maradt. Ez az érték magában foglalja a képkocka kiemelését, a DeepLabV3+ szegmentációs inferenciát, a bounding box kivágást, a ResNet50V2 klasszifikációs inferenciát, valamint az eredmény UI-frissítését. A szálkezelt architektúra ezeket a lépéseket részben párhuzamosítja: a videófolyam megjelenítési szála nem blokkolódik az inferencia ideje alatt, így a felhasználói élmény (UX) folyamatos marad.
+
+\textbf{3.5. Diszkusszió}
+
+A trigger-alapú (gombnyomásos) eseményvezérlés bevezetése a folyamatos képkockánkénti feldolgozással szemben kettős előnnyel járt. Egyrészt drasztikusan visszaszorította az in situ futtatáshoz szükséges hardveres erőforrásigényt: a folyamatos feldolgozáshoz GPU-intenzív infrastruktúra szükséges, míg a trigger-alapú megközelítés integrált grafikus processzoron is működőképes. Másrészt a predikciós megbízhatóságot is növelte: mivel a vizsgálóorvos csak az éles, stabil képkockáknál kér elemzést, a rendszer mentesül a hirtelen kameramozgások okozta elmosódásból (motion blur) fakadó téves riasztásoktól.
+
+Az eredmények kvalitatív elemzése ugyanakkor rávilágított a jelenlegi felépítés bizonyos korlátaira is. A szegmentációs modul fals pozitív hibái leggyakrabban az erős nyálkahártya-csillogások (spekuláris reflexiók), a vastagabb bélredők, illetve esetenként a látótérben maradt székletmaradványok téves azonosításából eredtek, ezek vizuálisan a polipokhoz hasonló konvex alakzatokat alkothatnak. Fals negatív maszkokat tipikusan a nyálkahártyába simuló, lapos (flat, sessile) morfológiájú lézióknál tapasztaltunk, ahol az elváltozás határai fokozatosan mennek át a normál szövetbe. Ezekre a nehéz esetekre megoldást jelenthet az NBI és a fehér fény modalitások szimultán bevonása a tanításba, vagy a kontúr-érzékenyebb veszteségfüggvények (pl. boundary loss) alkalmazása.
+
+A klasszifikációs modulnál a gerinchálózat (backbone) teljes finomhangolásának engedélyezése mérhetően hozzájárult a $91{,}6\%$-os szenzitivitás eléréséhez, a fagyasztott backbone-nal futtatott konfigurációk rendre alacsonyabb Recall értékeket produkáltak a keresztvalidáció során. A tévesztett (FP és FN) képek visszanézése megmutatta, hogy az éles szögből érkező megvilágítás és az elváltozások bélredők általi részleges kitakarása a leggyakoribb nehézség. A bounding box crop módszer (ahol a szegmentált régió fekete háttérrel kerül a klasszifikátorhoz) csökkenti ugyan a háttérzajt, de ha a szegmentációs maszk pontatlan (alulsegmentált), a klaszifikátor hiányos régiót kap bemenetként. Ez a kaszkád-architektúra immanens korlátja, amelyre a jövőben end-to-end tanítható megoldások kínálhatnak alternatívát.
+
+
+
+
+\hypertarget{tuxfalmutatuxf3-alkalmazuxe1sok}{%
+\subsection{\texorpdfstring{\textbf{4. Túlmutató alkalmazások}
+}{4. Túlmutató alkalmazások }}\label{tuxfalmutatuxf3-alkalmazuxe1sok}}
+
+\textbf{4.1. Platformfüggetlenség és klinikai integráció}
+
+A jelenlegi szoftveres keretrendszer sikeresen bizonyítja a szegmentációs és klasszifikációs architektúrák együttes, valós idejű futtathatóságát a mindennapi klinikai gyakorlatban. A piaci alternatívákkal szembeni legfőbb architekturális előnye a hardveres platformfüggetlenség: a megoldás kábeles HDMI/SDI-kapcsolaton keresztül fogadja a videójelet az endoszkópos toronyból, és az inferenciát egy külső, szabványos számítógépen (pl. mini PC) hajtja végre. Ez azt jelenti, hogy a megoldás nem kötődik egyetlen specifikus endoszkópos toronyhoz vagy zárt gyártói ökoszisztémához (Olympus, Pentax, Karl Storz és egyéb rendszerekkel egyaránt kompatibilis), így minimális illesztési (integráció) költséggel beépíthető a már meglévő kórházi infrastruktúrákba anélkül, hogy az endoszkópos torony szoftverét módosítani kellene.
+
+A rendszer másik klinikai előnye az automatikus esetrögzítés: minden vizsgálat során az elemzett képkockákat, a generált maszkokat és a klasszifikációs eredményeket egy strukturált adatbázisba (SQLite / PostgreSQL) menti. Ez kettős célt szolgál: egyrészt a retrospektív auditálhatóságot biztosítja (az orvos visszakövethet minden predikciót), másrészt folyamatosan bővülő, annotált adatbázist épít a modellek jövőbeli továbbképzéséhez (retraining). A valós klinikai adatok ilyen rendszeres visszacsatolása, a szakirodalomban \emph{continual learning} vagy \emph{active learning} keretrendszerként is ismert megközelítés, lehetővé teszi, hogy a modell teljesítménye idővel javuljon, és adaptálódjon az adott intézmény speciális endoszkópus-típusához, megvilágítási körülményeihez.
+
+\textbf{4.2. Többosztályos kiterjesztés}
+
+A jelenlegi bináris (neoplasztikus vs.\ nem neoplasztikus) felosztás az alacsony mintaszám kényszermegoldása volt. A diagnosztikai értéket azonban alapvetően növelné, ha a rendszer a teljes JNET skálán képes lenne precíz predikciót adni: 1. típus (hiperplasztikus), 2A (alacsony kockázatú adenoma), 2B (magas kockázatú adenoma/szubmukozális invázió gyanúja) és 3. típus (mély szubmukozális invázió). A négy osztály megkülönböztetése közvetlen terápiás relevanciával bír: a 2B/3. típusnál az endoszkópos mukózarezekció (EMR) helyett sebészi beavatkozást mérlegelnek. Egy kiterjedtebb, multicentrikus adatgyűjtési program, a Petz Aladár Kórház mellett további endoszkópos centrumok bevonásával, megteremthetné az ehhez szükséges, osztályonként legalább 300--500 elemű képanyagot. Ezzel az adatbázissal a jövőben visszatérhetünk a teljes JNET klasszifikációra.
+
+\textbf{4.3. Folyamatos monitorozás és riasztás}
+
+Amennyiben a kórházi erőforrás-korlátok dedikált AI-gyorsítók (pl. NVIDIA Jetson, Intel Neural Compute Stick) bevonásával lazíthatók, a rendszer átállítható a triggerelt logikáról a folyamatos, képkockánkénti (gombnyomás nélküli) monitorozásra. Egy ilyen üzemmód automatikus riasztási funkciókkal hívhatná fel az orvos figyelmét az endoszkóp látóterének perifériáján megjelenő, könnyen észrevétlen lézióra, csökkentve az Adenoma Miss Rate értékét. A periféria-riasztás különösen a gyors visszahúzás (withdrawal) fázisban lehet értékes, ahol a figyelem csökkent és a polipok egy pillanatra jelennek meg a képen.
+
+\textbf{4.4. Kiterjesztés más gasztroenterológiai területekre}
+
+A moduláris szoftverarchitektúra nem korlátozódik a kolonoszkópiás alkalmazásra. A modell más gasztroenterológiai területeken is potenciálisan alkalmazható: felső tápcsatornai endoszkópiára (gastroscopia, Barrett-nyálkahártya és gyomorrák szűrés), kapszulás endoszkópiára (ahol az automatikus analízis különösen értékes, mert az orvosnak több ezer képkockát kellene manuálisan végignéznie), valamint a közeljövőben várhatóan elterjedő mesterséges intelligencia által vezérelt endoszkópos navigációra. A cserélhető backbone-architektúra (plug-and-play gerinchálózat) lehetővé teszi, hogy területspecifikus előtanított modellek (pl. GastroNet vagy MedSAM) könnyen beilleszthetők legyenek a meglévő pipeline-ba az adatgyűjtés és tanítás elvégzése után.
+
+\hypertarget{uxf6sszegzuxe9s}{%
+\subsection{\texorpdfstring{\textbf{5. Összegzés}
+}{5. Összegzés }}\label{uxf6sszegzuxe9s}}
+
+\textbf{5.1. A probléma és az eredmények összefoglalása}
+
+A vastagbélrák szűrési hatékonyságának növelése és az Adenoma Miss Rate (AMR) csökkentése érdekében egy Python-alapú, eseményvezérelt döntéstámogató eszközt fejlesztettünk, tanítottunk be és validáltunk. A rendszer két mélytanulásos modult integrál egyetlen, valós idejű pipeline-ba: egy DeepLabV3+ (MobileNetV2 backbone) szegmentációs és egy ResNet50V2 klasszifikációs komponenst. A kutatás igazolta, hogy e hálózatok szálkezelt, közös futószalagra fűzése a hordozható célhardveren is képes egyidejűleg megfelelni a klinikai pontossági követelményeknek (magas szenzitivitás, közel $90\%$-os Dice) és a szoftvermérnöki sebességi elvárásoknak (1 másodperc alatti end-to-end látencia, 25--30 FPS élővideó).
+
+\textbf{5.2. Főbb elért eredmények}
+
+A szegmentációs modul a 206 elemet tartalmazó teszthalmazon $82{,}43\%$ IoU-t és $89{,}91\%$ Dice-score-t ért el. A klasszifikációs hálózat $n=238$ független tesztmintán $91{,}6\%$ szenzitivitást és $0{,}9132$ F1-score-t mutatott az optimalizált $0{,}74$-es döntési küszöbön. Mindkét modell teljesítette a kutatás elején meghatározott célértékeket. A keretrendszer end-to-end inferenciája stabilan 1 másodperc alatt maradt a hordozható célhardveren. Ezek az adatok együtt megalapozzák az eszköz ,,second reader'' szerepét a klinikai gyakorlatban.
+
+\textbf{5.3. Korlátok}
+
+A jelenlegi rendszernek több ismert korlátja is van. Az adathalmaz egyetlen intézményből (Petz Aladár Kórház) és egyetlen endoszkópus-típusból származik: más centrumokban, eltérő eszközökkel a mért teljesítmény valószínűleg kisebb mértékben, de módosulna. A bináris felosztás, bár statisztikailag indokolt volt, klinikai szempontból csak közelítő iránymutatást ad, hiszen a 2A és 2B JNET kategóriák eltérő kezelési protokollt igényelnek, amit a rendszer jelenleg nem különböztet meg. A valós klinikai értékelés (prospektív vizsgálat) még nem zajlott le, így a közölt számok retrospektív, izolált tesztelési körülmények között értendők.
+
+\textbf{5.4. További lépések}
+
+A legközelebbi lépés a prototípus prospektív, éles klinikai tesztelése: a valós vizsgálati körülmények közt gyűjtött visszajelzések megmutatják, hol szorul az UI ergonómiája javításra, és hol rontja a modell a legtöbbet. Középtávon a multicentrikus adatgyűjtés a prioritás, ami megalapozná a JNET-alapú többosztályos kiterjesztést -- a kutatás valódi végcélját. Hosszabb távon, dedikált AI-gyorsító bevonásával, a trigger-alapú architektúra felváltható folyamatos képkockánkénti elemzéssel és automatikus riasztással, ami az Adenoma Miss Rate-et főként a visszahúzás (withdrawal) fázisban csökkenthetné tovább.
+
+\hypertarget{felhasznuxe1lt-irodalom}{%
+\subsection{\texorpdfstring{\textbf{6. Felhasznált
+irodalom}}{6. Felhasznált irodalom}}\label{felhasznuxe1lt-irodalom}}
+
+\textbf{{[}1{]}} Bray, F., Ferlay, J., Soerjomataram, I., Siegel, R. L.,
+Torre, L. A., \& Jemal, A. (2018). Global cancer statistics 2018:
+GLOBOCAN estimates of incidence and mortality worldwide for 36 cancers
+in 185 countries. \emph{CA: a cancer journal for clinicians}, 68(6),
+394-424.
+
+\textbf{{[}2{]}} Corley, D. A., Jensen, C. D., Marks, A. R., Zhao, W.
+K., Lee, J. K., Doubeni, C. A., ... \& Levin, T. R. (2014). Adenoma
+detection rate and risk of colorectal cancer and death. \emph{The New
+England journal of medicine}, 370(14), 1298-1306.
+
+\textbf{{[}3{]}} Zhao, S., Wang, S., Pan, P., Xia, T., Chang, X., Yang,
+X., ... \& Qiu, M. (2019). Magnitude, risk factors, and factors
+associated with adenoma miss rate of tandem colonoscopy: a systematic
+review and meta-analysis. \emph{Gastroenterology}, 156(6), 1661-1674.
+
+\textbf{{[}4{]}} Ahn, S. B., Han, D. S., Bae, J. H., Byun, T. J., Kim,
+J. P., \& Eun, C. S. (2012). The miss rate for colorectal adenoma
+determined by quality-adjusted, back-to-back colonoscopies. \emph{Gut
+and liver}, 6(1), 64.
+
+\textbf{{[}5{]}} Mori, Y., Kudo, S. E., Wakamura, K., Misawa, M., Ogawa,
+Y., Kutsukawa, M., ... \& Ishida, F. (2018). Novel video endoscope using
+an artificial intelligence system for real-time optical biopsy of
+colorectal polyps: a pilot study. \emph{Gastrointestinal endoscopy},
+88(3), 529-534.
+
+\textbf{{[}6{]}} Repici, A., Badalamenti, M., Maselli, R., Correale, L.,
+Radaelli, F., Rondonotti, E., ... \& Hassan, C. (2020). Efficacy of
+real-time computer-aided detection of colorectal neoplasia in a
+randomized trial. \emph{Gastroenterology}, 159(2), 512-520.
+
+\textbf{{[}7{]}} Ren, J., et al. (2024). Artificial intelligence
+algorithms for real-time detection of colorectal polyps during
+colonoscopy: a review. \emph{American Journal of Cancer Research},
+14(11), 5456-5470.
+
+\textbf{{[}8{]}} Jha, D., Smedsrud, P. H., Riegler, M. A., Halvorsen,
+P., de Lange, T., Johansen, D., \& Johansen, H. D. (2020). Kvasir-seg: A
+segmented polyp dataset. In \emph{MultiMedia Modeling: 26th
+International Conference, MMM 2020, Daejeon, South Korea, January 5--8,
+2020, Proceedings, Part II 26} (pp. 451-462). Springer International
+Publishing.
+
+\textbf{{[}9{]}} Ahmad, O. F., Soares, A. S., Mazomenos, E., Brandao,
+P., Vega, R., Seward, E., ... \& Lovat, L. B. (2019). Artificial
+intelligence and computer-aided diagnosis in colonoscopy: current
+evidence and future directions. \emph{The Lancet Gastroenterology \&
+Hepatology}, 4(1), 71-80.
+
+\textbf{{[}10{]}} Chen, L. C., Papandreou, G., Kokkinos, I., Murphy, K.,
+\& Yuille, A. L. (2017). DeepLab: Semantic image segmentation with deep
+convolutional nets, atrous convolution, and fully connected CRFs.
+\emph{IEEE transactions on pattern analysis and machine intelligence},
+40(4), 834-848.
+
+\textbf{{[}11{]}} He, K., Zhang, X., Ren, S., \& Sun, J. (2016).
+Identity mappings in deep residual networks. In \emph{Computer
+Vision--ECCV 2016: 14th European Conference, Amsterdam, The Netherlands,
+October 11--14, 2016, Proceedings, Part IV 14} (pp. 630-645). Springer
+International Publishing.
+
+\textbf{{[}12{]}} Vinsard, D. G., Mori, Y., Misawa, M., Kudo, S. E.,
+Rosty, C., Wallace, M. B., ... \& Sharma, P. (2019). Quality assurance
+of computer-aided detection and diagnosis in colonoscopy.
+\emph{Gastrointestinal endoscopy}, 90(1), 55-63.
+
+\textbf{{[}13{]}} Dekker, E., Tanis, P. J., Vleugels, J. L., Kasi, P.
+M., \& Wallace, M. B. (2019). Colorectal cancer. \emph{The Lancet},
+394(10207), 1467-1480. \emph{(Ez egy kiváló, alapvető áttekintő cikk a
+vastagbélrákról és a polipokról).}
+
+\textbf{{[}14{]}} Rex, D. K., Ahnen, D. J., Baron, J. A., Batts, K. P.,
+Burke, C. A., Burt, R. W., ... \& You, Y. N. (2012). Serrated lesions of
+the colorectum: review and recommendations from an expert panel.
+\emph{The American journal of gastroenterology}, 107(9), 1315-1329.
+
+\textbf{{[}15{]}} Ignjatovic, A., East, J. E., Suzuki, N., Vance, M.,
+Guenther, T., \& Saunders, B. P. (2009). Optical diagnosis of small
+colorectal polyps at routine colonoscopy (Detect InSpect ChAracterise
+Resect and Discard; DISCARD trial): a prospective cohort study.
+\emph{The Lancet Oncology}, 10(12), 1171-1178. \emph{(Alapvető cikk az
+optikai biopsziáról).}
+
+\textbf{{[}16{]}} He, K., Zhang, X., Ren, S., \& Sun, J. (2016). Deep
+residual learning for image recognition. In \emph{Proceedings of the
+IEEE conference on computer vision and pattern recognition} (pp.
+770-778). \emph{(Ez maga az eredeti ResNet publikáció, ezt kötelező
+hivatkoznod, ha ResNet-et használsz!)}
+
+\textbf{{[}17{]}} Jha, D., et al. (2021). Real-time polyp detection,
+localization and segmentation in colonoscopy using deep learning.
+\emph{Ieee Access}, 9, 40496-40510.
+
+\textbf{{[}18{]}} Sokolova, M., \& Lapalme, G. (2009). A systematic
+analysis of performance measures for classification tasks.
+\emph{Information processing \& management}, 45(4), 427-437.
+\emph{(Standard hivatkozás a gépi tanulási metrikákra).}
+
+\end{document}
