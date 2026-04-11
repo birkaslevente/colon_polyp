@@ -11,6 +11,23 @@ import os
 try:
     import tensorflow as tf
     _TF_IMPORT_ERROR = None
+
+    # Fix for Keras version mismatch with RandomContrast (value_range argument)
+    try:
+        original_init = tf.keras.layers.RandomContrast.__init__
+        def patched_init(self, factor, seed=None, **kwargs):
+            kwargs.pop("value_range", None)
+            original_init(self, factor=factor, seed=seed, **kwargs)
+        tf.keras.layers.RandomContrast.__init__ = patched_init
+    except Exception as e:
+        print(f"Failed to patch RandomContrast: {e}")
+
+    # Register custom layer used in the new Keras model
+    @tf.keras.utils.register_keras_serializable(package="PolpyCLI", name="ResNetPreprocessLayer")
+    class ResNetPreprocessLayer(tf.keras.layers.Layer):
+        def call(self, inputs):
+            return tf.keras.applications.resnet_v2.preprocess_input(inputs)
+
 except Exception as _tf_exc:
     tf = None
     _TF_IMPORT_ERROR = _tf_exc
@@ -37,9 +54,58 @@ PERFORMANCE_LOG_FILE = os.path.join(_BASE_DIR, "performance_log.csv")
 
 DEEPLAB_CHECKPOINT = os.path.join(_BASE_DIR, "checkpoints", "best_model_epoch_38.pth")
 UNET_CHECKPOINT = os.path.join(_BASE_DIR, "checkpoints_unet", "best_model_epoch_22.pth")
-CLASSIFIER_MODEL_PATH = os.path.join(_BASE_DIR, "classificator_models", "resnet50v2_polyp_20260217_131050.keras")
+
+# --- classificator_models/ (TensorFlow–Keras, .gitignore alatt is lehet) ---
+#   *.keras            : tanított bináris klasszifikátor (ResNet50V2 + fej), betöltés: tf.keras.models.load_model
+#   *_metadata.json    : input_shape, backbone — dokumentáció; ha létezik, a bemeneti méret onnan olvasható
+#   *_history.json     : epochonkénti loss/acc (tanítás utáni elemzéshez), a futó app NEM használja
+CLASSIFIER_MODEL_DIR = os.path.join(_BASE_DIR, "classificator_models")
+CLASSIFIER_KERAS_PREFERRED = "cnn_s2_lr2e4_tb_os.keras"
+CLASSIFIER_KERAS_LEGACY = "resnet50v2_polyp_20260217_131050.keras"
 CLASSIFIER_INPUT_SIZE = 512
 CLASSIFIER_CLASS_NAMES = ["Benign (JNET 1)", "Malignant (JNET 2a/2b/3)"]
+
+
+def _resolve_classifier_keras_path():
+    """Klasszifikátor .keras útvonal: env → preferált fájl → régi név → legfrissebb *.keras a mappában."""
+    env = (os.environ.get("CLASSIFIER_MODEL_PATH") or "").strip()
+    if env and os.path.isfile(env):
+        return env
+    preferred = os.path.join(CLASSIFIER_MODEL_DIR, CLASSIFIER_KERAS_PREFERRED)
+    if os.path.isfile(preferred):
+        return preferred
+    legacy = os.path.join(CLASSIFIER_MODEL_DIR, CLASSIFIER_KERAS_LEGACY)
+    if os.path.isfile(legacy):
+        return legacy
+    if os.path.isdir(CLASSIFIER_MODEL_DIR):
+        candidates = [
+            os.path.join(CLASSIFIER_MODEL_DIR, f)
+            for f in os.listdir(CLASSIFIER_MODEL_DIR)
+            if f.lower().endswith(".keras")
+        ]
+        if candidates:
+            candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+            return candidates[0]
+    return preferred
+
+
+def _read_classifier_input_size(keras_path, default=CLASSIFIER_INPUT_SIZE):
+    """Ha van <stem>_metadata.json és input_shape, abból a négyzetes oldalhossz."""
+    stem, _ = os.path.splitext(os.path.basename(keras_path))
+    meta_path = os.path.join(os.path.dirname(keras_path), f"{stem}_metadata.json")
+    if not os.path.isfile(meta_path):
+        return default
+    try:
+        with open(meta_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        shape = data.get("input_shape")
+        if isinstance(shape, (list, tuple)) and len(shape) >= 2:
+            h, w = int(shape[0]), int(shape[1])
+            if h > 0 and w > 0 and h == w:
+                return h
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        pass
+    return default
 
 NUM_CLASSES = 2
 OUTPUT_STRIDE = 16
@@ -262,6 +328,8 @@ class MedicalAnalyzer:
         self.current_model_type = "deeplab"
         self.models_loaded = False
         self.classifier = None
+        self.classifier_keras_path = None
+        self.classifier_input_size = CLASSIFIER_INPUT_SIZE
         self.deeplab_model = None
         self.unet_model = None
         self.model = None
@@ -309,6 +377,10 @@ class MedicalAnalyzer:
             
             # TensorFlow / classifier opcionális: ha DLL hiba van, az app ettől még fusson.
             self.classifier = None
+            self.classifier_keras_path = _resolve_classifier_keras_path()
+            self.classifier_input_size = _read_classifier_input_size(
+                self.classifier_keras_path, CLASSIFIER_INPUT_SIZE
+            )
             if status_callback:
                 status_callback("Klasszifikátor betöltése (TensorFlow)...")
             if tf is not None:
@@ -317,14 +389,26 @@ class MedicalAnalyzer:
                 except Exception:
                     # CPU-only fallback, ha a GPU tiltás nem támogatott.
                     pass
+                if not os.path.isfile(self.classifier_keras_path):
+                    raise FileNotFoundError(
+                        f"Keras klasszifikátor nem található: {self.classifier_keras_path} "
+                        f"(mappa: {CLASSIFIER_MODEL_DIR})"
+                    )
+                print(
+                    f"Classifier: {self.classifier_keras_path} "
+                    f"(input {self.classifier_input_size}×{self.classifier_input_size})"
+                )
                 self.classifier = tf.keras.models.load_model(
-                    CLASSIFIER_MODEL_PATH,
+                    self.classifier_keras_path,
                     custom_objects={
-                        "preprocess_input": tf.keras.applications.resnet_v2.preprocess_input
+                        "preprocess_input": tf.keras.applications.resnet_v2.preprocess_input,
+                        "ResNetPreprocessLayer": ResNetPreprocessLayer
                     },
+                    compile=False
                 )
                 dummy_input_tf = np.zeros(
-                    (1, CLASSIFIER_INPUT_SIZE, CLASSIFIER_INPUT_SIZE, 3), dtype=np.float32
+                    (1, self.classifier_input_size, self.classifier_input_size, 3),
+                    dtype=np.float32,
                 )
                 _ = self.classifier.predict(dummy_input_tf, verbose=0)
             else:
@@ -415,7 +499,11 @@ class MedicalAnalyzer:
         rmin, rmax = np.where(rows)[0][[0, -1]]
         cmin, cmax = np.where(cols)[0][[0, -1]]
         roi = img_rgb[rmin:rmax + 1, cmin:cmax + 1]
-        roi_resized = cv2.resize(roi, (CLASSIFIER_INPUT_SIZE, CLASSIFIER_INPUT_SIZE), interpolation=cv2.INTER_LINEAR)
+        roi_resized = cv2.resize(
+            roi,
+            (self.classifier_input_size, self.classifier_input_size),
+            interpolation=cv2.INTER_LINEAR,
+        )
         return roi_resized.astype(np.float32)
 
     def classify(self, roi):

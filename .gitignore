@@ -65,3 +65,9 @@ random_test/
 
 **/*.ipynb
 **/*.bat
+# Kivetelek a TDK_Beta.latex buildhez
+!tdk/sze_logo.png
+!tdk/pipeline_diagram.png
+!tdk/3 minta predikcio avg iou 0.9329.png
+!feature_maps/pi486-R-H/SUMMARY_pi486-R-H.png
+!checkpoints_0409/training_curves_0409.png

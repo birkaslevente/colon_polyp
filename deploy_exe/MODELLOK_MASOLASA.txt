@@ -5,9 +5,11 @@ A kész build mappájába (ahol az live_capture_app.exe van) másold be ugyanezt
   checkpoints_unet\
     best_model_epoch_22.pth
   classificator_models\
-    resnet50v2_polyp_20260217_131050.keras
+    cnn_s2_lr2e4_tb_os.keras          (Keras modell; opcionálisan: *_metadata.json, *_history.json)
+    (vagy bármely más *.keras — a legfrissebb fájl kerül választásra, ha a preferált név hiányzik)
 
 Az alkalmazás futáskor ezeket az .exe melletti mappákból tölti (_BASE_DIR = az .exe könyvtára).
+Klasszifikátor út felülírása: környezeti változó CLASSIFIER_MODEL_PATH = teljes út egy .keras fájlhoz.
 
 Opcionális (szimuláció / teszt):
   images\   (ha képekkel akarsz próbálni)
