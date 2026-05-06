@@ -34,6 +34,7 @@ checkpoints_bak/
 # Tanított modellek / súlyok (nagy fájlok — GitHubra ne, lásd MODELLOK_MASOLASA)
 checkpoints/
 checkpoints_unet/
+checkpoints_0409/
 classificator_models/
 external_models/
 polyp_trained_e12_best_deeplabv3plus_mobilenet_voc_os16/
@@ -62,6 +63,21 @@ build/
 backups/
 wsl/
 random_test/
+feature_maps/
+samples/
+metrics/
+szakdolgozat/
+tdk/
+
+# Eseti segédszkriptek / lokális kísérleti fájlok
+temp_*.py
+update_*.py
+do_replacements*.py
+fix_*.py
+verify.py
+test_load.py
+parens.txt
+texput.log
 
 # Notebookok: alapból tiltott, csak a reprodukálhatósághoz szükséges kettő mehet fel
 **/*.ipynb

@@ -1,8 +1,0 @@
-{
-    "run_date": "0409",
-    "total_epochs_target": 50,
-    "actual_epochs": 38,
-    "best_val_iou": 0.8493644580428983,
-    "checkpoint_dir": "checkpoints_0409",
-    "model_tag": "best_model_0409"
-}

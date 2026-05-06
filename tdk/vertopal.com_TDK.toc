@@ -1,8 +1,0 @@
-\babel@toc {magyar}{}\relax 
-\contentsline {chapter}{\numberline {1}Motiváció}{2}{}%
-\contentsline {chapter}{\numberline {2}Módszerek}{5}{}%
-\contentsline {section}{\numberline {2.1}Klasszifikáció}{7}{}%
-\contentsline {chapter}{\numberline {3}Eredmények}{8}{}%
-\contentsline {chapter}{\numberline {4}Túlmutató alkalmazások}{9}{}%
-\contentsline {chapter}{\numberline {5}Összegzés}{10}{}%
-\contentsline {chapter}{Felhasznált irodalom}{11}{}%
