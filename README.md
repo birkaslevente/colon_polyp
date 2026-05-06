@@ -1,3 +1,38 @@
+# Polip szegmentációs rendszer (SZE szakdolgozat)
+
+Ez a repó a szakdolgozatban használt fejlesztési környezetet tartalmazza:
+
+- notebookos tanítás (`colon_short_szd_r.ipynb`, `colon_short_szd_r U-net.ipynb`),
+- valós idejű alkalmazás (`live_capture_app.py`),
+- reprodukálhatósági és használati dokumentáció.
+
+## Gyors áttekintés
+
+- Tanítási függőségek: `requirements_train.txt`
+- App függőségek: `requirements_app.txt`
+- Reprodukálhatóság: `REPRODUCIBILITY.md`
+- App használati útmutató: `APP_USAGE_HU.md`
+- Modellfájlok másolása: `deploy_exe/MODELLOK_MASOLASA.txt`
+
+## Fontos korlát
+
+Klinikai képek/maszkok és betanított súlyfájlok adatvédelmi, illetve méretkorlát miatt nem részei a publikus repónak. A teljes futtatáshoz saját vagy engedélyezett adatkészlet és modellek szükségesek.
+
+## Minimális indítás
+
+```bash
+python -m venv .venv
+# Windows:
+.venv\Scripts\activate
+python -m pip install -r requirements_app.txt
+python -m pip install pygrabber
+python live_capture_app.py
+```
+
+## Megjegyzés
+
+Az alábbi szakasz az eredeti (upstream) `VainF/DeepLabV3Plus-Pytorch` leírása, amelyre ez a projekt részben épül.
+
 # DeepLabv3Plus-Pytorch
 
 Pretrained DeepLabv3, DeepLabv3+ for Pascal VOC & Cityscapes.

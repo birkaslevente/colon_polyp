@@ -3,6 +3,7 @@ import threading
 import time
 import csv
 import json
+import sqlite3
 import sys
 import traceback
 import numpy as np
@@ -112,6 +113,33 @@ OUTPUT_STRIDE = 16
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 INPUT_SIZE = 513
 OUTPUT_SAVE_DIR = os.path.join(_BASE_DIR, "saved_results")
+PREDICTIONS_DB_FILE = os.path.join(OUTPUT_SAVE_DIR, "predictions.db")
+
+
+def _init_predictions_db():
+    """SQLite-ADTB trigger-eseményekhez: maszk BLOB + metaadatok; WAL a többszálas hozzáféréshez."""
+    os.makedirs(OUTPUT_SAVE_DIR, exist_ok=True)
+    conn = sqlite3.connect(PREDICTIONS_DB_FILE, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS predictions (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp      TEXT    NOT NULL,
+            class_name     TEXT    NOT NULL,
+            confidence     REAL    NOT NULL,
+            seg_confidence REAL,
+            seg_model      TEXT,
+            cls_model      TEXT,
+            input_path     TEXT,
+            mask_path      TEXT,
+            mask_blob      BLOB
+        );
+        CREATE INDEX IF NOT EXISTS idx_predictions_ts ON predictions(timestamp);
+        """
+    )
+    conn.commit()
+    return conn
 
 
 def _imread_unicode(path):
@@ -587,7 +615,11 @@ class MedicalAnalyzer:
         classify_ms = 0.0
 
         if np.any(rows) and np.any(cols):
-            roi = self._extract_roi(orig_img_np, polyp_mask_bool)
+            # Fehér hátterű kép generálása a klasszifikátornak
+            white_bg_img = np.full_like(orig_img_np, 255)
+            white_bg_img[polyp_mask_rgb] = orig_img_np[polyp_mask_rgb]
+            
+            roi = self._extract_roi(white_bg_img, polyp_mask_bool)
             t_cls_start = time.perf_counter()
             cls_result, conf_score = self.classify(roi)
             t_cls_end = time.perf_counter()
@@ -641,6 +673,15 @@ class App:
         self.analyzer = MedicalAnalyzer(DEVICE)
         self.video_thread = None
         self._last_result = None
+        self._is_analyzing_live = False # Flag a live analysishoz
+
+        # SQLite: trigger-eseményenként audit-log (maszk BLOB + metaadatok)
+        try:
+            self._db_conn = _init_predictions_db()
+        except sqlite3.Error as e:
+            print(f"SQLite init error: {e}")
+            self._db_conn = None
+        self._db_lock = threading.Lock()
 
         self.main_frame = ctk.CTkFrame(self.root, fg_color="transparent")
         self.main_frame.pack(fill=tk.BOTH, expand=True)
@@ -862,16 +903,46 @@ class App:
                 f.write(buf.tobytes())
 
     def _save_results(self, frame, trans_img_vis, segmented_polyp, cls_res, conf, seg_conf=0.0):
-        """Mentés: input, masked képek + metadata.json."""
+        """Trigger-esemény rögzítése: PNG képek a mappába + SQLite sor (maszk BLOB + metaadatok)."""
         os.makedirs(OUTPUT_SAVE_DIR, exist_ok=True)
         timestamp = time.strftime("%Y%m%d_%H%M%S")
         prefix = os.path.join(OUTPUT_SAVE_DIR, timestamp)
-        self._save_image(f"{prefix}_input.png", cv2.cvtColor(trans_img_vis, cv2.COLOR_RGB2BGR))
-        self._save_image(f"{prefix}_masked.png", cv2.cvtColor(segmented_polyp, cv2.COLOR_RGB2BGR))
-        metadata = {"class": cls_res, "confidence": float(conf), "seg_confidence": float(seg_conf), "timestamp": timestamp}
-        with open(f"{prefix}_metadata.json", "w", encoding="utf-8") as f:
-            json.dump(metadata, f, indent=2, ensure_ascii=False)
-        self.lbl_status.configure(text=f"Mentve: {OUTPUT_SAVE_DIR}")
+        input_path = f"{prefix}_input.png"
+        mask_path = f"{prefix}_masked.png"
+        input_bgr = cv2.cvtColor(trans_img_vis, cv2.COLOR_RGB2BGR)
+        mask_bgr = cv2.cvtColor(segmented_polyp, cv2.COLOR_RGB2BGR)
+        self._save_image(input_path, input_bgr)
+        self._save_image(mask_path, mask_bgr)
+
+        # Maszk bináris tömörített reprezentációja (PNG bytes) BLOB-ként a DB-be
+        ok, buf = cv2.imencode(".png", mask_bgr)
+        mask_blob = buf.tobytes() if ok else None
+
+        seg_model = getattr(self.analyzer, "current_model_type", "deeplab")
+        cls_model = "ResNet50V2"
+
+        if self._db_conn is not None:
+            try:
+                with self._db_lock:
+                    self._db_conn.execute(
+                        """INSERT INTO predictions
+                           (timestamp, class_name, confidence, seg_confidence,
+                            seg_model, cls_model, input_path, mask_path, mask_blob)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            timestamp, cls_res, float(conf), float(seg_conf),
+                            seg_model, cls_model, input_path, mask_path, mask_blob,
+                        ),
+                    )
+                    self._db_conn.commit()
+                self.lbl_status.configure(
+                    text=f"Mentve DB-be: {os.path.basename(PREDICTIONS_DB_FILE)}"
+                )
+            except sqlite3.Error as e:
+                print(f"SQLite insert error: {e}")
+                self.lbl_status.configure(text=f"Mentés hiba (DB): {e}")
+        else:
+            self.lbl_status.configure(text=f"Mentve (csak PNG): {OUTPUT_SAVE_DIR}")
 
     def _manual_save(self):
         """Manuális mentés: utolsó eredmény mentése."""
@@ -1009,7 +1080,9 @@ class App:
 
                 # Live Analysis Trigger
                 if self.check_live_analysis_var.get() and self.analyzer.models_loaded:
-                    self.run_analysis_on_frame(frame, display_w, display_h)
+                    if not getattr(self, '_is_analyzing_live', False):
+                        self._is_analyzing_live = True
+                        threading.Thread(target=self._async_live_analyze, args=(frame, display_w, display_h), daemon=True).start()
 
             # Videófájl: csúszka követi a lejátszást (user húzás közben ~0.5s szünet)
             if (
@@ -1026,6 +1099,19 @@ class App:
                         self._slider_updating = False
         
         self.root.after(delay, self.update_live_feed)
+
+    def _async_live_analyze(self, frame, display_w, display_h):
+        # Háttérben lefut az elemzés, majd a főszálra ütemezi a megjelenítést
+        try:
+            results = self.analyzer.analyze(frame)
+            self.root.after(0, lambda: self._apply_live_analysis_result(frame, display_w, display_h, results))
+        except Exception as e:
+            print(f"Élő elemzés hiba: {e}")
+            self.root.after(0, lambda: setattr(self, '_is_analyzing_live', False))
+
+    def _apply_live_analysis_result(self, frame, display_w, display_h, results):
+        self.run_analysis_on_frame(frame, display_w, display_h, results=results)
+        self._is_analyzing_live = False
 
     def run_analysis_on_frame(self, frame, display_w, display_h, results=None):
         """Eredmények megjelenítése. Ha results megadva, azt használja; különben analyze(frame)."""
@@ -1061,14 +1147,14 @@ class App:
              return
 
         self.lbl_status.configure(text="Analyzing... Please wait.")
+        self.btn_analyze.configure(state="disabled") # Gomb letiltása amíg dolgozik
         self.root.update_idletasks() # Force UI update
-        
-        start_time = time.time()
         
         # Get snapshot
         ret, frame = self.video_thread.read()
         if not ret or frame is None:
             self.lbl_status.configure(text="Error: No video frame available.")
+            self.btn_analyze.configure(state="normal")
             return
 
         h, w = frame.shape[:2]
@@ -1076,28 +1162,43 @@ class App:
         scale = display_h / h
         display_w = int(w * scale)
         
-        # Single analyze call
-        segmented_polyp, cls_res, conf, trans_img_vis, seg_conf = self.analyzer.analyze(frame)
-        results = (segmented_polyp, cls_res, conf, trans_img_vis, seg_conf)
+        # Külön szálon futtatjuk a hálózatot, hogy ne fagyjon a GUI
+        threading.Thread(target=self._async_analyze, args=(frame, display_w, display_h), daemon=True).start()
+
+    def _async_analyze(self, frame, display_w, display_h):
+        start_time = time.time()
+        # Elemzés lefut a háttérszálon...
+        results = self.analyzer.analyze(frame)
+        elapsed = time.time() - start_time
         
+        # UI frissítések a main szálra ütemezve
+        self.root.after(0, lambda: self._apply_analysis_result(frame, display_w, display_h, results, elapsed))
+
+    def _apply_analysis_result(self, frame, display_w, display_h, results, elapsed):
+        segmented_polyp, cls_res, conf, trans_img_vis, seg_conf = results
         # Store for manual save
         self._last_result = (frame, trans_img_vis, segmented_polyp, cls_res, conf, seg_conf)
         
         # Update UI
         self.run_analysis_on_frame(frame, display_w, display_h, results=results)
         
-        elapsed = time.time() - start_time
-        
         # Auto save if enabled
         if self.save_mode_var.get() == "auto":
             self._save_results(*self._last_result)
         
         self.lbl_status.configure(text=f"Result: {cls_res} ({conf*100:.1f}%) | Processing Time: {elapsed:.3f}s")
+        self.btn_analyze.configure(state="normal")
 
     def on_close(self):
         print("Closing application...")
         if self.video_thread:
             self.video_thread.stop()
+        if getattr(self, "_db_conn", None) is not None:
+            try:
+                with self._db_lock:
+                    self._db_conn.close()
+            except sqlite3.Error as e:
+                print(f"SQLite close error: {e}")
         self.root.destroy()
 
 def run_app():

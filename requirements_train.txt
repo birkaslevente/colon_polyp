@@ -1,0 +1,22 @@
+#
+# Függőségek a notebookos tanításhoz/kiértékeléshez:
+#   - colon_short_szd_r.ipynb
+#   - colon_short_szd_r U-net.ipynb
+#
+# Telepítés:
+#   python -m pip install -r requirements_train.txt
+#
+
+torch
+torchvision
+numpy
+pillow
+pandas
+matplotlib
+tqdm
+opencv-python
+scikit-learn
+jsonschema
+openpyxl
+visdom
+segmentation-models-pytorch

@@ -63,7 +63,10 @@ backups/
 wsl/
 random_test/
 
+# Notebookok: alapból tiltott, csak a reprodukálhatósághoz szükséges kettő mehet fel
 **/*.ipynb
+!colon_short_szd_r.ipynb
+!colon_short_szd_r U-net.ipynb
 **/*.bat
 # Kivetelek a TDK_Beta.latex buildhez
 !tdk/sze_logo.png
