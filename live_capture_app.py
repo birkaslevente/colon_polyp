@@ -53,7 +53,7 @@ def _app_base_dir():
 _BASE_DIR = _app_base_dir()
 PERFORMANCE_LOG_FILE = os.path.join(_BASE_DIR, "performance_log.csv")
 
-DEEPLAB_CHECKPOINT = os.path.join(_BASE_DIR, "checkpoints", "best_model_epoch_38.pth")
+DEEPLAB_CHECKPOINT = os.path.join(_BASE_DIR, "checkpoints_0409", "best_model_0409_epoch_31.pth")
 UNET_CHECKPOINT = os.path.join(_BASE_DIR, "checkpoints_unet", "best_model_epoch_22.pth")
 
 # --- classificator_models/ (TensorFlow–Keras, .gitignore alatt is lehet) ---
@@ -64,7 +64,7 @@ CLASSIFIER_MODEL_DIR = os.path.join(_BASE_DIR, "classificator_models")
 CLASSIFIER_KERAS_PREFERRED = "cnn_s2_lr2e4_tb_os.keras"
 CLASSIFIER_KERAS_LEGACY = "resnet50v2_polyp_20260217_131050.keras"
 CLASSIFIER_INPUT_SIZE = 512
-CLASSIFIER_CLASS_NAMES = ["Benign (JNET 1)", "Malignant (JNET 2a/2b/3)"]
+CLASSIFIER_CLASS_NAMES = ["Non-neoplastic (JNET 1)", "Neoplastic (JNET 2a/2b/3)"]
 
 
 def _resolve_classifier_keras_path():
@@ -965,7 +965,7 @@ class App:
             self.model_var.set("deeplab")
             self.analyzer.switch_model("deeplab")
             self.btn_model.configure(text="Model: DeepLabV3+", fg_color=("#8e44ad", "#8e44ad"))
-            self.lbl_status.configure(text="Aktív modell: DeepLabV3+ (MobileNet, epoch 38)")
+            self.lbl_status.configure(text="Aktív modell: DeepLabV3+ (MobileNet, 0409 epoch 31)")
 
     def start_source(self, sim=False):
         if self.video_thread:

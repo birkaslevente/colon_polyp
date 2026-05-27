@@ -22,7 +22,7 @@ A nagy fájlokat (`.pth`, `.keras`) **nem kötelező** az exe „belsejébe” t
 **Gyakorlatban:**
 
 1. Build után a **`dist\LiveCapture\`** (vagy hasonló) mappába **másolod** ugyanazt a struktúrát, mint a repóban:
-   - `checkpoints\`
+   - `checkpoints_0409\`
    - `checkpoints_unet\`
    - `classificator_models\`
 2. A `live_capture_app.py` **PyInstaller alatt** a `_BASE_DIR`-t az **.exe mappájára** állítja → ezek a mappák **az .exe mellett** legyenek.

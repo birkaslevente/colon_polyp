@@ -1,6 +1,6 @@
 A kész build mappájába (ahol a live_capture_app.exe van) másold be ugyanezt a szerkezetet a projekt gyökeréből:
 
-  checkpoints\
+  checkpoints_0409\
     best_model_0409_epoch_31.pth
   checkpoints_unet\
     best_model_epoch_22.pth
@@ -9,7 +9,7 @@ A kész build mappájába (ahol a live_capture_app.exe van) másold be ugyanezt 
     (vagy bármely más *.keras — a legfrissebb fájl kerül választásra, ha a preferált név hiányzik)
 
 Az alkalmazás futáskor ezeket az .exe melletti mappákból tölti (_BASE_DIR = az .exe könyvtára).
-Ha a fenti DeepLab checkpoint neve eltér, nevezd át best_model_epoch_38.pth-re,
+Ha a fenti DeepLab checkpoint neve eltér, nevezd át best_model_0409_epoch_31.pth-re,
 vagy igazítsd a live_capture_app.py DEEPLAB_CHECKPOINT útvonalát.
 Klasszifikátor út felülírása: környezeti változó CLASSIFIER_MODEL_PATH = teljes út egy .keras fájlhoz.
 

@@ -79,6 +79,15 @@ test_load.py
 parens.txt
 texput.log
 
+# Minimalis, reprodukálható modellkészlet (pontosan 2 checkpoint)
+!checkpoints_0409/
+checkpoints_0409/*
+!checkpoints_0409/best_model_0409_epoch_31.pth
+
+!checkpoints_unet/
+checkpoints_unet/*
+!checkpoints_unet/best_model_epoch_22.pth
+
 # Notebookok: alapból tiltott, csak a reprodukálhatósághoz szükséges kettő mehet fel
 **/*.ipynb
 !colon_short_szd_r.ipynb

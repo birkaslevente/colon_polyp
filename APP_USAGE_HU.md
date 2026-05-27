@@ -13,7 +13,7 @@ python -m pip install pygrabber
 ```
 
 - Modellfájlok a projekt gyökerében:
-  - `checkpoints/`
+  - `checkpoints_0409/` (DeepLabV3+)
   - `checkpoints_unet/`
   - `classificator_models/`
 

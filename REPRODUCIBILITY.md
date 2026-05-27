@@ -61,7 +61,7 @@ Megjegyzés: a repóban szereplő notebookok a tanítási folyamatot és a kiér
 
 Az app a következő modelleket várja a projekt gyökerében:
 
-- `checkpoints/` (DeepLab checkpoint)
+- `checkpoints_0409/` (DeepLab checkpoint: `best_model_0409_epoch_31.pth`)
 - `checkpoints_unet/` (U-Net checkpoint)
 - `classificator_models/` (`.keras` klasszifikátor)
 
