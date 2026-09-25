@@ -95,7 +95,7 @@ TensorFlow **import** hiba esetén a klasszifikátor `None` marad, a szegmentál
 
 ### Mi van a klónban a súlyokból
 
-A `git ls-files` kimenetében nincs `.pth` és nincs `.keras`. A `.gitignore` két konkrét checkpointnevet kivételként megenged (`checkpoints_0409/best_model_0409_epoch_31.pth`, `checkpoints_unet/best_model_epoch_22.pth`), ezek a jelenlegi fában nincsenek követve. A `classificator_models/` mappa ignorálva van. A súlyok elhelyezése: `deploy_exe/MODELLOK_MASOLASA.txt`. PyInstaller alatt a `_BASE_DIR` az `.exe` könyvtára.
+A `git ls-files` kimenetében nincs `.pth` és nincs `.keras`. ResNet50V2- és ViT-súly egyaránt a helyi `classificator_models/` (vagy a `CLASSIFIER_MODEL_PATH`) alatt van, a klónban nincs. A `.gitignore` két konkrét checkpointnevet kivételként megenged (`checkpoints_0409/best_model_0409_epoch_31.pth`, `checkpoints_unet/best_model_epoch_22.pth`), ezek a jelenlegi fában nincsenek követve. A `classificator_models/` mappa ignorálva van. A súlyok elhelyezése: `deploy_exe/MODELLOK_MASOLASA.txt`. PyInstaller alatt a `_BASE_DIR` az `.exe` könyvtára.
 
 ## 5. Inferencia
 
