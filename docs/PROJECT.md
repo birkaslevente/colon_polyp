@@ -28,7 +28,7 @@ A klasszifikátor két címkét ismer. Forrás: `CLASSIFIER_CLASS_NAMES` a `live
 
 A Keras-modell egyetlen sigmoid kimenetet ad. A döntés a `MedicalAnalyzer.classify` függvényben: `malignant_prob >= 0.5` → neoplasztikus, és a visszaadott konfidencia ez a valószínűség. Alatta a címke nem neoplasztikus, a konfidencia `1.0 - malignant_prob`. Ha a klasszifikátor objektum `None`, a szöveg `Classifier unavailable`. Ha a ROI `None`, a függvény a nem neoplasztikus címkét adja 0.0 konfidenciával. Ha a maszk üres, az `analyze` a `No Polyp Detected` szöveget adja, klasszifikáció nélkül.
 
-A tanító notebookok a nyers címkét négy Excel-oszlopból olvassák (`JNET_1`, `JNET_2A`, `JNET_2B`, `JNET_3`, érték `'x'`). Ez a nyers címkeforma. Az élő app döntése ettől függetlenül bináris.
+A tanító notebookok a nyers címkét négy Excel-oszlopból olvassák (`JNET_1`, `JNET_2A`, `JNET_2B`, `JNET_3`, érték `'x'`). Ez a nyers címkeforma. Az élő app döntése ettől függetlenül bináris. Az élő slotba ResNet50V2 és helyi ViT `.keras` is tehető (4. fejezet).
 
 ## 3. Architektúra
 
@@ -47,7 +47,8 @@ szegmentáció (futás közben váltható)
         ▼
 fehér hátterű maszkolt polip → bbox ROI → resize a klasszifikátor bemenetére
         ▼
-Keras predict (ResNet50V2 bináris) — a betöltés a TF GPU-t elrejteni próbálja
+egy Keras .keras slot (bináris JNET) — ResNet50V2 vagy helyi ViT .keras
+        a betöltés a TF GPU-t elrejteni próbálja
         ▼
 UI (CustomTkinter) + performance_log.csv + saved_results/ + predictions.db
 ```
@@ -73,14 +74,20 @@ A U-Net **tanító** notebook ImageNet encoder-súlyokkal inicializál (`encoder
 
 ### Klasszifikátor (TensorFlow / Keras)
 
-A fájlfejléc szerint ResNet50V2 + fej. Betöltés: `tf.keras.models.load_model`, `compile=False`, custom object: `ResNetPreprocessLayer` (`package="PolpyCLI"`), ami `resnet_v2.preprocess_input`-ot hív.
+Az élő úton egyetlen klasszifikátor-slot van. A slot egy bináris Keras `.keras` fájl: JNET 1 (nem neoplasztikus) szemben a JNET 2a/2b/3 összevont neoplasztikus címkével. A döntés továbbra is egy sigmoid kimenet, küszöb 0.5 (2. fejezet).
+
+Levente (CEO) szerint ebbe a slotba a **ResNet50V2 és a ViT is** érvényes élő opció, ha a megfelelő helyi `.keras` a helyén van. A szegmentáló (DeepLab vagy U-Net) és a klasszifikátor (ResNet50V2 vagy ViT) párosai egyaránt használhatók; a párok viselkedése közel azonos. Ehhez a mondathoz a repóban nincs számszerű összehasonlítás. A `Model` gomb csak a szegmentálót cseréli futás közben. A klasszifikátor a betöltéskor választott egyetlen `.keras`.
+
+A követett `live_capture_app.py` ViT-osztályt, ViT-importot és külön architektúra-ágat nem tartalmaz. A `tf.keras.models.load_model` azt a fájlt tölti, amit az útvonal-feloldás ad (`compile=False`). A regisztrált custom object a `ResNetPreprocessLayer` (`package="PolpyCLI"`) és a `resnet_v2.preprocess_input`. A fájlfejléc kommentje, a `performance_log.csv` `Cls_Model` oszlopa és a SQLite `cls_model` mezője a `ResNet50V2` szöveget írja akkor is, ha a betöltött fájl más architektúra. Ez felirat, nem architektúra-detektálás.
+
+ViT használata helyi súlycsere: a `.keras` a `CLASSIFIER_MODEL_PATH` vagy a `classificator_models/` alatt, plusz a bemeneti méret (`*_metadata.json`, különben 512) és a preprocess illesztése a mentett modellhez. A publikus fa ViT-súlyt nem tartalmaz.
 
 Útvonal-feloldás (`_resolve_classifier_keras_path`), ebben a sorrendben:
 
-1. `CLASSIFIER_MODEL_PATH` környezeti változó, ha létező fájl,
-2. `classificator_models/cnn_s2_lr2e4_tb_os.keras`,
-3. legacy név: `classificator_models/resnet50v2_polyp_20260217_131050.keras`,
-4. a mappa legfrissebb `*.keras` fájlja.
+1. `CLASSIFIER_MODEL_PATH`, ha létező fájl,
+2. preferált név: `classificator_models/cnn_s2_lr2e4_tb_os.keras`,
+3. legacy konstans, a `resnet50v2_polyp_*.keras` család egy konkrét fájlja: `classificator_models/resnet50v2_polyp_20260217_131050.keras`,
+4. ha az előző kettő nincs a mappában: a `classificator_models/` legfrissebb `*.keras` fájlja.
 
 Alap bemenet: 512×512 (`CLASSIFIER_INPUT_SIZE`). Ha a modell mellett van `<stem>_metadata.json` és az `input_shape` négyzetes, az oldalél onnan jön. A `*_history.json` a futó appot nem érinti.
 
@@ -99,8 +106,8 @@ Függvény: `MedicalAnalyzer.analyze` (`live_capture_app.py`).
    - U-Net: `sigmoid`, maszk ahol a valószínűség `> 0.5`.
    - DeepLab: maszk = `argmax` az osztálytengelyen (`output.max(1)[1]`; két osztálynál a polip az 1-es index). A szegmentációs konfidencia a class-1 softmax átlaga a maszk pixelein.
 3. **Utófeldolgozás.** A tensor denormalizálása uint8 képpé. A megjelenített maszkolt kép háttere fekete. A klasszifikátornak külön, 255-ös fehér hátterű kép készül, rajta a polip pixelei. `_extract_roi`: a maszk bbox-a, `cv2.resize` (`INTER_LINEAR`) a klasszifikátor oldalhosszára, `float32`.
-4. **Klasszifikáció.** `classify`: batch dimenzió, `predict`, egy sigmoid skalár, küszöb 0.5 (lásd 2. fejezet).
-5. **Napló.** `performance_log.csv` oszlopok: `Timestamp`, `Seg_Model`, `Cls_Model` (a kód mindig a `ResNet50V2` szöveget írja), `Total_Time_ms`, `Preprocess_ms`, `Segmentation_Inference_ms`, `Postprocess_ms`, `Classification_ms`.
+4. **Klasszifikáció.** `classify`: batch dimenzió, `predict`, egy sigmoid skalár, küszöb 0.5 (lásd 2. fejezet). A betöltött `.keras` lehet ResNet50V2 vagy helyi ViT; a hívás ugyanaz.
+5. **Napló.** `performance_log.csv` oszlopok: `Timestamp`, `Seg_Model`, `Cls_Model` (a kód mindig a `ResNet50V2` szöveget írja, ViT fájlnál is), `Total_Time_ms`, `Preprocess_ms`, `Segmentation_Inference_ms`, `Postprocess_ms`, `Classification_ms`.
 6. **Mentés** (`App._save_results`). Képek a `saved_results/` alá. SQLite: `saved_results/predictions.db`, tábla `predictions` (`timestamp`, `class_name`, `confidence`, `seg_confidence`, `seg_model`, `cls_model`, `input_path`, `mask_path`, `mask_blob`), WAL mód.
 
 ## 6. Adat, labelformátum, ami nincs a fában
@@ -180,5 +187,6 @@ A README vagy a deploy-dokumentáció említi, a követett fa nem tartalmazza:
 | `install.bat`, `build_exe.bat`, `build_exe_console.bat` | `deploy_exe/README_HU.md` | `**/*.bat` ignorálva, nincs a fában |
 | `visualize_features.py` | `requirements_app.txt` fejléc | nincs a fában |
 | a két best checkpoint | app + gitignore-kivétel | nincs követve |
+| ViT klasszifikátor-súly | Levente: helyi `.keras` az élő slotban | nincs a követett fában; a kód nem épít ViT-architektúrát |
 
 A DeepLab-notebook egyik kiértékelő cellája `checkpoints_0409/best_model_0409_epoch_38.pth` hiányát naplózza. Az app által betöltött fájlnév az epoch 31-es checkpoint. A két fájlnév nincs közös, dokumentált kiválasztási szabállyal összekötve.
