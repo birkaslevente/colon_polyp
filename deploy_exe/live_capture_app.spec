@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 # Futtatas: repó gyökeréből deploy_exe\build_onedir.ps1
 import os
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_dynamic_libs, collect_submodules
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(SPEC)))
 
@@ -19,6 +19,8 @@ hiddenimports = [
     "network",
     "network.modeling",
     "utils.ext_transforms",
+    "utils.vit_classifier",
+    "utils.explainability",
     "segmentation_models_pytorch",
     "cv2",
     "PIL._tkinter_finder",
@@ -44,6 +46,16 @@ try:
     datas += collect_data_files("keras")
 except Exception as e:
     print(f"[spec] Keras collect figyelmeztetés: {e}")
+
+# ViT út: Torch + torchvision ugyanabból a venv-ből, mint a ResNet TensorFlow
+for _pkg in ("torch", "torchvision"):
+    try:
+        _datas, _bins, _hidden = collect_all(_pkg)
+        datas += _datas
+        binaries += _bins
+        hiddenimports += _hidden
+    except Exception as e:
+        raise SystemExit(f"[spec] {_pkg} collect sikertelen: {e}")
 
 # CustomTkinter: JSON témák / assetek — nélkülük az exe néma összeomlás lehet
 try:

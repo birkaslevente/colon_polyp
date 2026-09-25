@@ -1,3 +1,4 @@
+import ctypes
 import cv2
 import threading
 import time
@@ -6,6 +7,8 @@ import json
 import sqlite3
 import sys
 import traceback
+from ctypes import wintypes
+from dataclasses import dataclass
 import numpy as np
 import torch
 import os
@@ -41,6 +44,21 @@ import segmentation_models_pytorch as smp
 import tkinter as tk
 import random
 import utils.ext_transforms as et
+from utils.explainability import (
+    blend_heatmap,
+    find_last_keras_conv_layer,
+    grad_cam_keras,
+    grad_cam_torch,
+    map_cam_to_full_frame,
+    build_keras_grad_model,
+    vit_attention_map,
+)
+from utils.vit_classifier import (
+    load_vit_checkpoint,
+    preprocess_rgb_uint8,
+    predict_vit,
+    THRESHOLD as VIT_THRESHOLD,
+)
 
 # --- Configuration ---
 def _app_base_dir():
@@ -65,6 +83,19 @@ CLASSIFIER_KERAS_PREFERRED = "cnn_s2_lr2e4_tb_os.keras"
 CLASSIFIER_KERAS_LEGACY = "resnet50v2_polyp_20260217_131050.keras"
 CLASSIFIER_INPUT_SIZE = 512
 CLASSIFIER_CLASS_NAMES = ["Non-neoplastic (JNET 1)", "Neoplastic (JNET 2a/2b/3)"]
+VIT_MODEL_DIR = os.path.join(CLASSIFIER_MODEL_DIR, "vit_gui_share")
+VIT_CHECKPOINT_NAME = "vit_final_224.pth"
+
+
+def _resolve_vit_path():
+    """ViT .pth: env VIT_MODEL_PATH → classificator_models/vit_gui_share/vit_final_224.pth."""
+    env = (os.environ.get("VIT_MODEL_PATH") or "").strip()
+    if env and os.path.isfile(env):
+        return env
+    preferred = os.path.join(VIT_MODEL_DIR, VIT_CHECKPOINT_NAME)
+    if os.path.isfile(preferred):
+        return preferred
+    return preferred
 
 
 def _resolve_classifier_keras_path():
@@ -317,7 +348,11 @@ class VideoCaptureThread:
         with self.lock:
             if self.frame is None:
                 return False, None
-            return self.ret, self.frame.copy()
+            try:
+                return self.ret, self.frame.copy()
+            except MemoryError:
+                # Heatmap / OOM közben ne törje el a live feed láncot
+                return False, None
 
     def get_fps(self):
         with self.lock:
@@ -349,6 +384,19 @@ class VideoCaptureThread:
         if self.cap:
             self.cap.release()
 
+@dataclass
+class ExplainContext:
+    segmented_polyp: np.ndarray
+    input_tensor: torch.Tensor | None
+    roi_batch: np.ndarray | None
+    bbox: tuple[int, int, int, int] | None
+    cls_label: str
+    malignant_prob: float
+    model_type: str
+    pred_mask: np.ndarray
+    vit_input_tensor: torch.Tensor | None = None
+
+
 # --- 2. Analyzer (Segmentation & Classification) ---
 class MedicalAnalyzer:
     def __init__(self, device):
@@ -361,6 +409,13 @@ class MedicalAnalyzer:
         self.deeplab_model = None
         self.unet_model = None
         self.model = None
+        self.explain_mode = "classification"
+        self._keras_cam_layer = None
+        self._keras_grad_model = None
+        self._last_explain_ctx = None
+        self.vit_classifier = None
+        self.vit_path = None
+        self.classifier_backend = "keras"  # "vit" | "keras" — load_models sets preferred
 
         if not os.path.exists(PERFORMANCE_LOG_FILE):
             with open(PERFORMANCE_LOG_FILE, mode='w', newline='') as f:
@@ -403,51 +458,99 @@ class MedicalAnalyzer:
                 _ = self.deeplab_model(dummy_input_pt)
                 _ = self.unet_model(dummy_input_pt)
             
-            # TensorFlow / classifier opcionális: ha DLL hiba van, az app ettől még fusson.
+            # --- Klasszifikátorok: ViT (PyTorch, full-frame) + Keras ResNet (ROI) ---
             self.classifier = None
+            self.vit_classifier = None
+            self.vit_path = _resolve_vit_path()
             self.classifier_keras_path = _resolve_classifier_keras_path()
             self.classifier_input_size = _read_classifier_input_size(
                 self.classifier_keras_path, CLASSIFIER_INPUT_SIZE
             )
+
             if status_callback:
-                status_callback("Klasszifikátor betöltése (TensorFlow)...")
+                status_callback("ViT klasszifikátor betöltése...")
+            if os.path.isfile(self.vit_path):
+                try:
+                    self.vit_classifier = load_vit_checkpoint(self.vit_path, self.device)
+                    with torch.inference_mode():
+                        _ = self.vit_classifier(
+                            torch.zeros((1, 3, 224, 224), device=self.device)
+                        )
+                    print(f"ViT classifier: {self.vit_path} (input 224×224, full-frame)")
+                except Exception as vit_err:
+                    print(f"ViT betöltés sikertelen: {vit_err}")
+                    self.vit_classifier = None
+            else:
+                print(f"ViT checkpoint nem található: {self.vit_path}")
+
+            if status_callback:
+                status_callback("Keras klasszifikátor betöltése (opcionális)...")
             if tf is not None:
                 try:
                     tf.config.set_visible_devices([], "GPU")
                 except Exception:
-                    # CPU-only fallback, ha a GPU tiltás nem támogatott.
                     pass
-                if not os.path.isfile(self.classifier_keras_path):
-                    raise FileNotFoundError(
-                        f"Keras klasszifikátor nem található: {self.classifier_keras_path} "
-                        f"(mappa: {CLASSIFIER_MODEL_DIR})"
-                    )
-                print(
-                    f"Classifier: {self.classifier_keras_path} "
-                    f"(input {self.classifier_input_size}×{self.classifier_input_size})"
-                )
-                self.classifier = tf.keras.models.load_model(
-                    self.classifier_keras_path,
-                    custom_objects={
-                        "preprocess_input": tf.keras.applications.resnet_v2.preprocess_input,
-                        "ResNetPreprocessLayer": ResNetPreprocessLayer
-                    },
-                    compile=False
-                )
-                dummy_input_tf = np.zeros(
-                    (1, self.classifier_input_size, self.classifier_input_size, 3),
-                    dtype=np.float32,
-                )
-                _ = self.classifier.predict(dummy_input_tf, verbose=0)
+                try:
+                    tf.config.threading.set_inter_op_parallelism_threads(1)
+                    tf.config.threading.set_intra_op_parallelism_threads(2)
+                except Exception:
+                    pass
+                if os.path.isfile(self.classifier_keras_path):
+                    try:
+                        print(
+                            f"Classifier (Keras ROI): {self.classifier_keras_path} "
+                            f"(input {self.classifier_input_size}×{self.classifier_input_size})"
+                        )
+                        self.classifier = tf.keras.models.load_model(
+                            self.classifier_keras_path,
+                            custom_objects={
+                                "preprocess_input": tf.keras.applications.resnet_v2.preprocess_input,
+                                "ResNetPreprocessLayer": ResNetPreprocessLayer
+                            },
+                            compile=False
+                        )
+                        dummy_input_tf = np.zeros(
+                            (1, self.classifier_input_size, self.classifier_input_size, 3),
+                            dtype=np.float32,
+                        )
+                        _ = self.classifier.predict(dummy_input_tf, verbose=0)
+                        self._keras_cam_layer = find_last_keras_conv_layer(self.classifier)
+                        self._keras_grad_model = None
+                        if self._keras_cam_layer is not None:
+                            print(f"Grad-CAM Keras layer: {self._keras_cam_layer.name}")
+                            try:
+                                self._keras_grad_model = build_keras_grad_model(
+                                    self.classifier, self._keras_cam_layer
+                                )
+                                print("Grad-CAM Keras model ready.")
+                            except Exception as cam_err:
+                                print(f"Grad-CAM modell építés sikertelen (heatmap ki): {cam_err}")
+                                self._keras_cam_layer = None
+                                self._keras_grad_model = None
+                    except Exception as keras_err:
+                        print(f"Keras klasszifikátor betöltés sikertelen: {keras_err}")
+                        self.classifier = None
+                else:
+                    print(f"Keras klasszifikátor nem található: {self.classifier_keras_path}")
             else:
-                print(f"TensorFlow import hiba: {_TF_IMPORT_ERROR}")
+                print(f"TensorFlow import hiba (Keras ROI ki): {_TF_IMPORT_ERROR}")
+
+            # Alap backend: ViT ha van, különben Keras
+            if self.vit_classifier is not None:
+                self.classifier_backend = "vit"
+            elif self.classifier is not None:
+                self.classifier_backend = "keras"
+            else:
+                self.classifier_backend = "keras"
+            print(f"Classifier backend: {self.classifier_backend}")
 
             self.models_loaded = True
             if status_callback:
-                if self.classifier is None:
-                    status_callback("Rendszer kész. (Klasszifikátor: kikapcsolva, TensorFlow hiba)")
+                has_clf = self.vit_classifier is not None or self.classifier is not None
+                if not has_clf:
+                    status_callback("Rendszer kész. (Klasszifikátor: nincs betöltve)")
                 else:
-                    status_callback("Rendszer kész.")
+                    status_callback(f"Rendszer kész. (Cls: {self.classifier_backend})")
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -502,6 +605,29 @@ class MedicalAnalyzer:
             print("Switched to U-Net")
         return self.current_model_type
 
+    def switch_classifier_backend(self, backend: str) -> str:
+        """Váltás 'vit' (full-frame) és 'keras' (ROI) között."""
+        if backend == "vit":
+            if self.vit_classifier is None:
+                print("ViT nem elérhető")
+                return self.classifier_backend
+            self.classifier_backend = "vit"
+            print("Classifier backend: ViT-B/16 (full-frame)")
+        elif backend == "keras":
+            if self.classifier is None:
+                print("Keras ResNet nem elérhető")
+                return self.classifier_backend
+            self.classifier_backend = "keras"
+            print("Classifier backend: ResNet50V2 (ROI)")
+        return self.classifier_backend
+
+    def active_cls_model_name(self) -> str:
+        if self.classifier_backend == "vit" and self.vit_classifier is not None:
+            return "ViT-B/16"
+        if self.classifier is not None:
+            return "ResNet50V2"
+        return "none"
+
 
     def preprocess(self, image):
         # Image is a PIL Image
@@ -534,36 +660,103 @@ class MedicalAnalyzer:
         )
         return roi_resized.astype(np.float32)
 
-    def classify(self, roi):
-        """Klasszifikáció: egyetlen sigmoid kimenet, threshold 0.5."""
-        if self.classifier is None:
-            return "Classifier unavailable", 0.0
-        if roi is None:
-            return CLASSIFIER_CLASS_NAMES[0], 0.0
-        roi_batch = np.expand_dims(roi, 0)
-        pred = self.classifier.predict(roi_batch, verbose=0)
-        malignant_prob = float(pred[0][0])
-        if malignant_prob >= 0.5:
-            return CLASSIFIER_CLASS_NAMES[1], malignant_prob
-        else:
-            return CLASSIFIER_CLASS_NAMES[0], 1.0 - malignant_prob
-
     def analyze(self, frame_bgr):
+        results, _ctx = self._analyze_core(frame_bgr)
+        return results
+
+    def analyze_with_context(self, frame_bgr):
+        return self._analyze_core(frame_bgr)
+
+    def _analyze_core(self, frame_bgr):
         if not self.models_loaded:
             empty_img = np.zeros((INPUT_SIZE, INPUT_SIZE, 3), dtype=np.uint8)
-            return empty_img, "Modellek betöltése...", 0.0, empty_img, 0.0
+            empty = (empty_img, "Modellek betöltése...", 0.0, empty_img, 0.0)
+            return empty, None
 
         t_start = time.perf_counter()
-        
-        # 1. Convert BGR to RGB and PIL
+
         t_pre_start = time.perf_counter()
         frame_rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
         pil_img = Image.fromarray(frame_rgb)
 
-        # 2. Inference
         input_tensor, trans_img_tensor = self.preprocess(pil_img)
         t_pre_end = time.perf_counter()
-        
+
+        mean = np.array([0.485, 0.456, 0.406])
+        std = np.array([0.229, 0.224, 0.225])
+        img_np = trans_img_tensor.cpu().numpy().transpose(1, 2, 0)
+        img_np = std * img_np + mean
+        img_np = np.clip(img_np, 0, 1)
+        orig_img_np = (img_np * 255).astype(np.uint8)
+        trans_img_vis = orig_img_np
+
+        use_vit = (
+            self.classifier_backend == "vit" and self.vit_classifier is not None
+        )
+
+        # --- ViT: nincs szegmentáció — csak full-frame klasszifikáció ---
+        if use_vit:
+            t_inf_start = time.perf_counter()
+            t_inf_end = t_inf_start  # seg skipped
+            t_post_start = time.perf_counter()
+
+            segmented_polyp = orig_img_np.copy()  # jobb panel: teljes frame
+            pred_mask = np.zeros((INPUT_SIZE, INPUT_SIZE), dtype=np.uint8)
+            seg_conf = 0.0
+            bbox = (0, INPUT_SIZE - 1, 0, INPUT_SIZE - 1)
+            roi_batch = None
+
+            t_cls_start = time.perf_counter()
+            vit_input_tensor = preprocess_rgb_uint8(orig_img_np)
+            cls_result, conf_score, malignant_prob = predict_vit(
+                self.vit_classifier, vit_input_tensor, threshold=VIT_THRESHOLD
+            )
+            t_cls_end = time.perf_counter()
+            classify_ms = (t_cls_end - t_cls_start) * 1000
+            t_post_end = time.perf_counter()
+            t_end = time.perf_counter()
+
+            total_ms = (t_end - t_start) * 1000
+            pre_ms = (t_pre_end - t_pre_start) * 1000
+            inf_ms = 0.0
+            post_ms = (t_post_end - t_post_start) * 1000
+            cls_name = self.active_cls_model_name()
+
+            try:
+                with open(PERFORMANCE_LOG_FILE, mode='a', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow([
+                        time.strftime("%Y-%m-%d %H:%M:%S"),
+                        "none", cls_name,
+                        f"{total_ms:.2f}",
+                        f"{pre_ms:.2f}",
+                        f"{inf_ms:.2f}",
+                        f"{post_ms:.2f}",
+                        f"{classify_ms:.2f}"
+                    ])
+                print(
+                    f"Logged Performance: Total={total_ms:.2f}ms "
+                    f"(Pre={pre_ms:.2f}, Seg=skip, Cls={classify_ms:.2f} [{cls_name}])"
+                )
+            except Exception as e:
+                print(f"Error logging performance: {e}")
+
+            results = (segmented_polyp, cls_result, conf_score, trans_img_vis, seg_conf)
+            ctx = ExplainContext(
+                segmented_polyp=segmented_polyp,
+                input_tensor=None,
+                roi_batch=None,
+                bbox=bbox,
+                cls_label=cls_result,
+                malignant_prob=malignant_prob,
+                model_type=self.current_model_type,
+                pred_mask=pred_mask,
+                vit_input_tensor=vit_input_tensor.detach().clone(),
+            )
+            self._last_explain_ctx = ctx
+            return results, ctx
+
+        # --- ResNet / egyéb: szegmentáció + ROI klasszifikáció ---
         t_inf_start = time.perf_counter()
         with torch.no_grad():
             output = self.model(input_tensor)
@@ -575,91 +768,273 @@ class MedicalAnalyzer:
                 pred_mask = output.max(1)[1].cpu().numpy()[0]
         t_inf_end = time.perf_counter()
 
-        # 3. Visualization (Matches colon_short.ipynb logic exactly)
         t_post_start = time.perf_counter()
-        
-        # Unnormalize input tensor for visualization
-        # mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
-        mean = np.array([0.485, 0.456, 0.406])
-        std = np.array([0.229, 0.224, 0.225])
-        
-        # trans_img_tensor is (C, H, W)
-        img_np = trans_img_tensor.cpu().numpy().transpose(1, 2, 0) # (H, W, C)
-        img_np = std * img_np + mean
-        img_np = np.clip(img_np, 0, 1)
-        
-        # Convert to uint8 (orig_img_np)
-        orig_img_np = (img_np * 255).astype(np.uint8)
-        
-        # Create masked image (final_img)
-        # Background is black, polyp is original image content
+
         final_img = np.zeros_like(orig_img_np)
         polyp_mask_bool = pred_mask.astype(bool)
-        
-        # Stack mask to 3 channels
         polyp_mask_rgb = np.stack([polyp_mask_bool] * 3, axis=-1)
-        
         final_img[polyp_mask_rgb] = orig_img_np[polyp_mask_rgb]
-        
-        segmented_polyp = final_img # 513x513
-        trans_img_vis = orig_img_np # 513x513
 
+        segmented_polyp = final_img
         seg_conf = float(np.mean(probs[polyp_mask_bool])) if np.any(polyp_mask_bool) else 0.0
 
-        # 4. Classification
         rows = np.any(polyp_mask_bool, axis=1)
         cols = np.any(polyp_mask_bool, axis=0)
-        
+
         cls_result = "No Polyp Detected"
         conf_score = 0.0
+        malignant_prob = 0.0
         classify_ms = 0.0
+        bbox = None
+        roi_batch = None
+        vit_input_tensor = None
 
         if np.any(rows) and np.any(cols):
-            # Fehér hátterű kép generálása a klasszifikátornak
+            rmin, rmax = int(np.where(rows)[0][[0, -1]][0]), int(np.where(rows)[0][[0, -1]][1])
+            cmin, cmax = int(np.where(cols)[0][[0, -1]][0]), int(np.where(cols)[0][[0, -1]][1])
+            bbox = (rmin, rmax, cmin, cmax)
+
             white_bg_img = np.full_like(orig_img_np, 255)
             white_bg_img[polyp_mask_rgb] = orig_img_np[polyp_mask_rgb]
-            
             roi = self._extract_roi(white_bg_img, polyp_mask_bool)
             t_cls_start = time.perf_counter()
-            cls_result, conf_score = self.classify(roi)
+            cls_result, conf_score, malignant_prob, roi_batch = self._classify_roi(roi)
             t_cls_end = time.perf_counter()
             classify_ms = (t_cls_end - t_cls_start) * 1000
-            
+
         t_post_end = time.perf_counter()
         t_end = time.perf_counter()
-        
-        # Calculate durations in ms
+
         total_ms = (t_end - t_start) * 1000
         pre_ms = (t_pre_end - t_pre_start) * 1000
         inf_ms = (t_inf_end - t_inf_start) * 1000
         post_ms = (t_post_end - t_post_start) * 1000
-        
-        # Log to CSV
+        cls_name = self.active_cls_model_name()
+
         try:
             with open(PERFORMANCE_LOG_FILE, mode='a', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow([
-                    time.strftime("%Y-%m-%d %H:%M:%S"), 
-                    self.current_model_type, "ResNet50V2",
-                    f"{total_ms:.2f}", 
-                    f"{pre_ms:.2f}", 
-                    f"{inf_ms:.2f}", 
+                    time.strftime("%Y-%m-%d %H:%M:%S"),
+                    self.current_model_type, cls_name,
+                    f"{total_ms:.2f}",
+                    f"{pre_ms:.2f}",
+                    f"{inf_ms:.2f}",
                     f"{post_ms:.2f}",
                     f"{classify_ms:.2f}"
                 ])
-            print(f"Logged Performance: Total={total_ms:.2f}ms (Pre={pre_ms:.2f}, Seg={inf_ms:.2f}, Post={post_ms:.2f}, Cls={classify_ms:.2f})")
+            print(f"Logged Performance: Total={total_ms:.2f}ms (Pre={pre_ms:.2f}, Seg={inf_ms:.2f}, Post={post_ms:.2f}, Cls={classify_ms:.2f} [{cls_name}])")
         except Exception as e:
             print(f"Error logging performance: {e}")
 
-        return segmented_polyp, cls_result, conf_score, trans_img_vis, seg_conf
+        results = (segmented_polyp, cls_result, conf_score, trans_img_vis, seg_conf)
+        keep_cam = bbox is not None
+        ctx = ExplainContext(
+            segmented_polyp=segmented_polyp,
+            input_tensor=input_tensor.detach().clone() if keep_cam else None,
+            roi_batch=roi_batch if keep_cam else None,
+            bbox=bbox,
+            cls_label=cls_result,
+            malignant_prob=malignant_prob,
+            model_type=self.current_model_type,
+            pred_mask=pred_mask,
+            vit_input_tensor=None,
+        )
+        self._last_explain_ctx = ctx
+        return results, ctx
+
+    def _classify_roi(self, roi):
+        """Return label, confidence, raw malignant prob, and ROI batch for Grad-CAM."""
+        if self.classifier is None:
+            return "Classifier unavailable", 0.0, 0.0, None
+        if roi is None:
+            return CLASSIFIER_CLASS_NAMES[0], 0.0, 0.0, None
+        roi_batch = np.expand_dims(roi, 0)
+        pred = self.classifier.predict(roi_batch, verbose=0)
+        malignant_prob = float(pred[0][0])
+        if malignant_prob >= 0.5:
+            return CLASSIFIER_CLASS_NAMES[1], malignant_prob, malignant_prob, roi_batch
+        return CLASSIFIER_CLASS_NAMES[0], 1.0 - malignant_prob, malignant_prob, roi_batch
+
+    def classify(self, roi):
+        """Klasszifikáció: egyetlen sigmoid kimenet, threshold 0.5."""
+        label, conf, _prob, _batch = self._classify_roi(roi)
+        return label, conf
+
+    def compute_heatmap(self, ctx: ExplainContext | None, mode: str):
+        """Grad-CAM / ViT attention overlay; returns (display_rgb, explain_ms) or (None, 0)."""
+        if mode == "off" or ctx is None or ctx.bbox is None:
+            return None, 0.0
+
+        t0 = time.perf_counter()
+        try:
+            if mode == "classification":
+                if (
+                    self.classifier_backend == "vit"
+                    and self.vit_classifier is not None
+                    and ctx.vit_input_tensor is not None
+                ):
+                    cam_224 = vit_attention_map(self.vit_classifier, ctx.vit_input_tensor)
+                    cam_full = cv2.resize(
+                        cam_224, (INPUT_SIZE, INPUT_SIZE), interpolation=cv2.INTER_LINEAR
+                    )
+                elif (
+                    self.classifier is not None
+                    and ctx.roi_batch is not None
+                    and self._keras_cam_layer is not None
+                ):
+                    class_index = 1 if ctx.malignant_prob >= 0.5 else 0
+                    cam_small = grad_cam_keras(
+                        self.classifier,
+                        ctx.roi_batch,
+                        class_index,
+                        self._keras_cam_layer,
+                        grad_model=self._keras_grad_model,
+                    )
+                    cam_full = map_cam_to_full_frame(
+                        cam_small, ctx.bbox, out_hw=(INPUT_SIZE, INPUT_SIZE)
+                    )
+                else:
+                    return None, 0.0
+            elif mode == "segmentation":
+                if ctx.input_tensor is None:
+                    return None, 0.0
+                cam_full = grad_cam_torch(
+                    self.model,
+                    ctx.input_tensor,
+                    ctx.model_type,
+                    target_class=1,
+                )
+            else:
+                return None, 0.0
+
+            display_rgb = blend_heatmap(ctx.segmented_polyp, cam_full)
+            explain_ms = (time.perf_counter() - t0) * 1000
+            tag = "attention" if (
+                mode == "classification" and self.classifier_backend == "vit"
+            ) else "gradcam"
+            print(f"Explain heatmap ({tag}): {explain_ms:.1f}ms (mode={mode})")
+            return display_rgb, explain_ms
+        except Exception as e:
+            print(f"Heatmap error ({mode}): {e}")
+            import traceback
+            traceback.print_exc()
+            return None, 0.0
+
+# Kijelzett osztálynevek — JNET nélkül. A modell belső címkéje ettől független marad.
+_CLASS_COLORS = {
+    "non": ("#1F7A4D", "#E5F4EC"),
+    "neo": ("#C46A1A", "#F8EDE3"),
+    "neutral": ("#5C6570", "#EEF1F4"),
+}
+
+
+def display_class_name(cls_res):
+    """GUI felirat: Nem neoplasztikus / Neoplasztikus / Nincs polip."""
+    raw = (cls_res or "").strip()
+    low = raw.lower()
+    if "no polyp" in low or "nincs polip" in low:
+        return "Nincs polip", "neutral"
+    if "non-neoplastic" in low or low.startswith("non-neo") or low.startswith("nem neo"):
+        return "Nem neoplasztikus", "non"
+    if "neoplastic" in low or low.startswith("neo"):
+        return "Neoplasztikus", "neo"
+    if not raw or raw == "—":
+        return "—", "neutral"
+    return raw, "neutral"
+
+
+def aspect_name_for_ratio(ratio):
+    """16:9, 16:10 vagy 4:3. A 16:10 ugyanazt az elrendezést kapja, mint a 16:9."""
+    if ratio >= 1.7:
+        return "16:9", 16 / 9
+    if ratio >= 1.5:
+        return "16:10", 16 / 10
+    return "4:3", 4 / 3
+
+
+def _work_area(root):
+    """Windows munkaterület (tálca nélkül). Sikertelen híváskor a teljes képernyő."""
+    try:
+        rect = wintypes.RECT()
+        ok = ctypes.windll.user32.SystemParametersInfoW(48, 0, ctypes.byref(rect), 0)
+        if ok:
+            width = int(rect.right - rect.left)
+            height = int(rect.bottom - rect.top)
+            if width > 400 and height > 300:
+                return width, height, int(rect.left), int(rect.top)
+    except (AttributeError, OSError, ValueError):
+        pass
+    return root.winfo_screenwidth(), root.winfo_screenheight(), 0, 0
+
+
+def choose_fixed_window(root):
+    """Egyszeri ablakméret a monitor arányából. Utána nem méretezhető.
+
+    A méret a Tk képernyő-koordinátájában készül. A Win32 munkaterület csak akkor
+    számít, ha ugyanabban a pixelterben van — különben a DPI-skála kétszer számítana.
+    """
+    screen_w = max(1, int(root.winfo_screenwidth()))
+    screen_h = max(1, int(root.winfo_screenheight()))
+    name, aspect = aspect_name_for_ratio(screen_w / screen_h)
+    area_w, area_h, area_x, area_y = _work_area(root)
+    if area_w <= int(screen_w * 1.05) and area_h <= int(screen_h * 1.05):
+        box_w, box_h, origin_x, origin_y = area_w, area_h, area_x, area_y
+    else:
+        box_w, box_h, origin_x, origin_y = screen_w, screen_h, 0, 0
+    max_w = max(1, box_w)
+    max_h = max(1, box_h)
+    if max_w / max_h > aspect:
+        win_h = max_h
+        win_w = int(round(win_h * aspect))
+    else:
+        win_w = max_w
+        win_h = int(round(win_w / aspect))
+    x = origin_x + max(0, (box_w - win_w) // 2)
+    y = origin_y + max(0, (box_h - win_h) // 2)
+    root.geometry(f"{win_w}x{win_h}+{x}+{y}")
+    root.resizable(False, False)
+    return win_w, win_h, name
+
+
+def compute_preview_slots(win_w, win_h):
+    """Bal oldal: két kisebb kép egymás alatt. Jobb oldal: a nagy eredmény.
+
+    A 16:10 ugyanazt a számítást használja, mint a 16:9. A slotok a teljes
+    ablakmagasságot kitöltik.
+    """
+    toolbar_h = 52
+    pad = 10
+    title_h = 26
+    text_h = 92
+    footer_h = 22
+    gap = 8
+    inner_w = max(320, win_w - 2 * pad)
+    inner_h = max(240, win_h - toolbar_h - 2 * pad)
+    small_img = max(100, (inner_h - 2 * title_h - footer_h - gap) // 2)
+    result_img = max(small_img + 32, inner_h - title_h - text_h)
+    overflow = small_img + gap + result_img - (inner_w - 8)
+    if overflow > 0:
+        cut_result = min(overflow, max(0, result_img - (small_img + 32)))
+        result_img -= cut_result
+        overflow -= cut_result
+        if overflow > 0:
+            small_img = max(80, small_img - overflow)
+            result_img = max(small_img, inner_w - 8 - gap - small_img)
+    return small_img, result_img, footer_h
+
 
 # --- 3. GUI Application (CustomTkinter – modern kinézet, tkinter háttér) ---
 class App:
     def __init__(self, root, window_title="HDMI Live Polyp Segmentation"):
         self.root = root
         self.root.title(window_title)
-        self.root.geometry("1600x600")
-        self.root.minsize(1200, 520)
+        self._win_w, self._win_h, self._aspect_name = choose_fixed_window(root)
+        self._live_img_side, self._result_img_side, self._footer_row_h = compute_preview_slots(
+            self._win_w, self._win_h
+        )
+        self._snap_img_side = self._live_img_side
+        self._preview_sz = self._live_img_side
 
         # Dinamikus képekhez referencia (GC ellen)
         self._live_image_ref = None
@@ -674,6 +1049,19 @@ class App:
         self.video_thread = None
         self._last_result = None
         self._is_analyzing_live = False # Flag a live analysishoz
+        self._explain_generation = 0
+        # Heatmap külön szálon, sorosan — soha ne blokkolja az élőképet / phase-1-et
+        self._explain_lock = threading.Lock()
+        # Cache: base maszk + mindkét Grad-CAM overlay (váltás újrafuttatás nélkül)
+        self._overlay_cache = {
+            "base": None,
+            "classification": None,
+            "segmentation": None,
+        }
+        self._overlay_cache_gen = -1
+        # Utolsó megjelenített RGB (átméretezéskor újrarajzolás)
+        self._last_snap_rgb = None
+        self._last_seg_rgb = None
 
         # SQLite: trigger-eseményenként audit-log (maszk BLOB + metaadatok)
         try:
@@ -686,8 +1074,9 @@ class App:
         self.main_frame = ctk.CTkFrame(self.root, fg_color="transparent")
         self.main_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.top_panel = ctk.CTkFrame(self.main_frame, height=44, corner_radius=0)
-        self.top_panel.grid(row=0, column=0, columnspan=3, sticky="ew")
+        self.top_panel = ctk.CTkFrame(self.main_frame, height=52, corner_radius=0)
+        self.top_panel.grid(row=0, column=0, columnspan=2, sticky="ew")
+        self.top_panel.grid_propagate(False)
 
         self.camera_list = list_available_cameras() or ["No Camera"]
         default_cam = "No Camera"
@@ -700,66 +1089,146 @@ class App:
              else:
                  default_cam = self.camera_list[0]
 
-        self.lbl_cam = ctk.CTkLabel(self.top_panel, text="Camera:")
-        self.lbl_cam.pack(side=tk.LEFT, padx=5)
+        self.lbl_status = ctk.CTkLabel(
+            self.top_panel,
+            text="Rendszer inicializálása...",
+            font=ctk.CTkFont(size=12),
+            anchor="e",
+            width=120,
+        )
+        self.lbl_status.pack(side=tk.RIGHT, padx=(4, 8))
+
+        self.lbl_cam = ctk.CTkLabel(self.top_panel, text="Kamera")
+        self.lbl_cam.pack(side=tk.LEFT, padx=(8, 2))
 
         self.combo_cam = ctk.CTkComboBox(
-            self.top_panel, values=self.camera_list, width=280, state="readonly"
+            self.top_panel, values=self.camera_list, width=100, state="readonly"
         )
         self.combo_cam.set(default_cam)
-        self.combo_cam.pack(side=tk.LEFT, padx=5)
+        self.combo_cam.pack(side=tk.LEFT, padx=2)
 
         self.btn_hdmi = ctk.CTkButton(
-            self.top_panel, text="Start Live Input",
+            self.top_panel, text="Élő indítás",
             command=lambda: self.start_source(sim=False),
-            fg_color=("#2980b9", "#2980b9"), width=140,
+            fg_color=("#2980b9", "#2980b9"), width=96, height=28,
         )
-        self.btn_hdmi.pack(side=tk.LEFT, padx=10, pady=5)
+        self.btn_hdmi.pack(side=tk.LEFT, padx=3, pady=8)
 
         self.btn_sim = ctk.CTkButton(
-            self.top_panel, text="Simulation (Images)",
+            self.top_panel, text="Szimuláció",
             command=lambda: self.start_source(sim=True),
-            fg_color=("#27ae60", "#27ae60"), width=160,
+            fg_color=("#27ae60", "#27ae60"), width=88, height=28,
         )
-        self.btn_sim.pack(side=tk.LEFT, padx=10, pady=5)
+        self.btn_sim.pack(side=tk.LEFT, padx=3, pady=8)
 
-        self.model_var = tk.StringVar(value="deeplab")
-        self.btn_model = ctk.CTkButton(
-            self.top_panel, text="Model: DeepLabV3+", command=self.toggle_model,
-            fg_color=("#8e44ad", "#8e44ad"), width=200,
+        ctk.CTkLabel(self.top_panel, text="Szegmentáló").pack(side=tk.LEFT, padx=(6, 2))
+        self._seg_labels = {
+            "DeepLabV3+": "deeplab",
+            "U-Net": "unet",
+        }
+        self.seg_var = tk.StringVar(value="DeepLabV3+")
+        self.seg_menu = ctk.CTkOptionMenu(
+            self.top_panel,
+            values=list(self._seg_labels.keys()),
+            variable=self.seg_var,
+            command=self._on_seg_model_change,
+            width=112,
+            height=28,
         )
-        self.btn_model.pack(side=tk.LEFT, padx=10, pady=5)
+        self.seg_menu.pack(side=tk.LEFT, padx=(0, 4), pady=8)
 
-        self.controls_panel = ctk.CTkFrame(self.top_panel, fg_color="transparent")
-        self.controls_panel.pack(side=tk.LEFT, padx=20, fill=tk.X, expand=True)
+        ctk.CTkLabel(self.top_panel, text="Modell").pack(side=tk.LEFT, padx=(4, 2))
+        self._clf_labels = {
+            "ViT-B/16": "vit",
+            "ResNet50V2": "keras",
+        }
+        self.clf_var = tk.StringVar(value="ViT-B/16")
+        self.clf_menu = ctk.CTkOptionMenu(
+            self.top_panel,
+            values=list(self._clf_labels.keys()),
+            variable=self.clf_var,
+            command=self._on_classifier_change,
+            width=112,
+            height=28,
+        )
+        self.clf_menu.pack(side=tk.LEFT, padx=(0, 4), pady=8)
+
+        ctk.CTkLabel(self.top_panel, text="Magyarázat").pack(side=tk.LEFT, padx=(4, 2))
+        self._explain_labels = {
+            "Klasszifikáció": "classification",
+            "Szegmentálás": "segmentation",
+            "Ki": "off",
+        }
+        self.explain_var = tk.StringVar(value="Klasszifikáció")
+        self._explain_last_mode = "classification"
+        self.explain_menu = ctk.CTkOptionMenu(
+            self.top_panel,
+            values=list(self._explain_labels.keys()),
+            variable=self.explain_var,
+            command=self._on_explain_mode_change,
+            width=108,
+            height=28,
+        )
+        self.explain_menu.pack(side=tk.LEFT, padx=(0, 4), pady=8)
+        self.analyzer.explain_mode = "classification"
 
         self.check_live_analysis_var = tk.BooleanVar(value=False)
         self.check_live_analysis = ctk.CTkCheckBox(
-            self.controls_panel, text="Live Analysis", variable=self.check_live_analysis_var
+            self.top_panel, text="Élő anal.", variable=self.check_live_analysis_var
         )
-        self.check_live_analysis.pack(side=tk.TOP, anchor="w", pady=(0, 4))
+        self.check_live_analysis.pack(side=tk.LEFT, padx=4)
+
+        self.btn_analyze = ctk.CTkButton(
+            self.top_panel, text="Elemzés (Space)", command=self.capture_and_analyze,
+            font=ctk.CTkFont(size=13, weight="bold"), fg_color=("#e74c3c", "#c0392b"),
+            width=108, height=28,
+        )
+        self.btn_analyze.pack(side=tk.LEFT, padx=3, pady=8)
+
+        self.save_mode_var = tk.StringVar(value="manual")
+        self.save_mode_var.trace_add("write", lambda *_: self._update_save_button_state())
+        self._save_mode_labels = {"Kézi": "manual", "Auto": "auto"}
+        self.save_mode_menu = ctk.CTkOptionMenu(
+            self.top_panel,
+            values=list(self._save_mode_labels.keys()),
+            command=lambda choice: self.save_mode_var.set(self._save_mode_labels.get(choice, "manual")),
+            width=78,
+            height=28,
+        )
+        self.save_mode_menu.set("Kézi")
+        self.save_mode_menu.pack(side=tk.LEFT, padx=(4, 2), pady=8)
+        self.btn_save = ctk.CTkButton(
+            self.top_panel, text="Mentés", command=self._manual_save,
+            fg_color=("#27ae60", "#27ae60"), width=72, height=28,
+        )
+        self.btn_save.pack(side=tk.LEFT, padx=3, pady=8)
 
         def _panel_frame(parent, title):
             f = ctk.CTkFrame(parent, corner_radius=8)
-            ctk.CTkLabel(f, text=title, font=ctk.CTkFont(size=12, weight="bold")).pack(
-                anchor="w", padx=6, pady=(4, 2)
-            )
+            lbl = ctk.CTkLabel(f, text=title, font=ctk.CTkFont(size=12, weight="bold"))
+            lbl.pack(anchor="w", padx=6, pady=(4, 2))
+            f._title_label = lbl
             return f
 
-        self.live_panel_frame = _panel_frame(self.main_frame, "Live Feed")
-        self.live_panel_frame.grid(row=1, column=0, padx=4, pady=2, sticky="new")
-        self._preview_sz = 360
-        self._footer_row_h = 28
-        self._live_video_column = ctk.CTkFrame(self.live_panel_frame, fg_color="transparent")
-        self._live_video_column.pack(anchor="n", fill=tk.NONE, expand=False)
-        sz, fh = self._preview_sz, self._footer_row_h
-        self._live_stack = ctk.CTkFrame(self._live_video_column, fg_color="transparent", width=sz, height=sz)
-        self._live_stack.pack(anchor="n", padx=2, pady=(0, 2))
-        self._live_stack.pack_propagate(False)
+        small = self._live_img_side
+        footer = self._footer_row_h
+        result = self._result_img_side
+        small_h = small + footer
+
+        self.left_column = ctk.CTkFrame(self.main_frame, fg_color="transparent")
+        self.left_column.grid(row=1, column=0, padx=(8, 4), pady=8, sticky="n")
+
+        self.live_panel_frame = _panel_frame(self.left_column, "Élőkép")
+        self.live_panel_frame.pack(anchor="n", pady=(0, 6))
+        self._live_stack = ctk.CTkFrame(
+            self.live_panel_frame, fg_color="transparent", width=small, height=small_h
+        )
+        self._live_stack.grid_propagate(False)
+        self._live_stack.pack(anchor="n", padx=6, pady=(0, 6))
         self._live_stack.grid_columnconfigure(0, weight=1)
-        self._live_stack.grid_rowconfigure(0, weight=0, minsize=sz - fh)
-        self._live_stack.grid_rowconfigure(1, weight=0, minsize=fh)
-        self.live_panel = ctk.CTkLabel(self._live_stack, text="Waiting...")
+        self._live_stack.grid_rowconfigure(0, weight=0, minsize=small)
+        self._live_stack.grid_rowconfigure(1, weight=0, minsize=footer)
+        self.live_panel = ctk.CTkLabel(self._live_stack, text="Várakozás")
         self.live_panel.grid(row=0, column=0, sticky="nsew")
         self.video_slider = ctk.CTkSlider(
             self._live_stack,
@@ -771,106 +1240,79 @@ class App:
         )
         self._video_slider_packed = False
 
-        self.snapshot_panel_frame = _panel_frame(self.main_frame, "Network Input (Center Crop)")
-        self.snapshot_panel_frame.grid(row=1, column=1, padx=4, pady=2, sticky="new")
-        self._snapshot_inner = ctk.CTkFrame(self.snapshot_panel_frame, fg_color="transparent", width=sz, height=sz)
-        self._snapshot_inner.pack(anchor="n", padx=2, pady=(0, 2))
-        self._snapshot_inner.pack_propagate(False)
+        self.snapshot_panel_frame = _panel_frame(self.left_column, "Hálózat bemenet")
+        self.snapshot_panel_frame.pack(anchor="n")
+        self._snapshot_inner = ctk.CTkFrame(
+            self.snapshot_panel_frame, fg_color="transparent", width=small, height=small
+        )
+        self._snapshot_inner.grid_propagate(False)
+        self._snapshot_inner.pack(anchor="n", padx=6, pady=(0, 6))
         self._snapshot_inner.grid_columnconfigure(0, weight=1)
-        self._snapshot_inner.grid_rowconfigure(0, weight=0, minsize=sz - fh)
-        self._snapshot_inner.grid_rowconfigure(1, weight=0, minsize=fh)
-        self.snapshot_panel = ctk.CTkLabel(self._snapshot_inner, text="No Capture")
+        self._snapshot_inner.grid_rowconfigure(0, weight=0, minsize=small)
+        self.snapshot_panel = ctk.CTkLabel(self._snapshot_inner, text="Nincs kép")
         self.snapshot_panel.grid(row=0, column=0, sticky="nsew")
 
-        self.result_panel_frame = _panel_frame(self.main_frame, "Polyp Segmentation")
-        self.result_panel_frame.grid(row=1, column=2, padx=4, pady=2, sticky="new")
-        self._result_inner = ctk.CTkFrame(self.result_panel_frame, fg_color="transparent", width=sz, height=sz)
-        self._result_inner.pack(anchor="n", padx=2, pady=(0, 2))
-        self._result_inner.pack_propagate(False)
+        self.result_panel_frame = _panel_frame(self.main_frame, "Eredmény")
+        self.result_panel_frame.grid(row=1, column=1, padx=(4, 8), pady=8, sticky="n")
+        self._result_inner = ctk.CTkFrame(
+            self.result_panel_frame, fg_color="transparent", width=result, height=result
+        )
+        self._result_inner.grid_propagate(False)
+        self._result_inner.pack(anchor="n", padx=6, pady=(0, 2))
         self._result_inner.grid_columnconfigure(0, weight=1)
-        self._result_inner.grid_rowconfigure(0, weight=0, minsize=sz - fh)
-        self._result_inner.grid_rowconfigure(1, weight=0, minsize=fh)
-        self.result_panel = ctk.CTkLabel(self._result_inner, text="Result")
+        self._result_inner.grid_rowconfigure(0, weight=1)
+        self.result_panel = ctk.CTkLabel(self._result_inner, text="Eredmény")
         self.result_panel.grid(row=0, column=0, sticky="nsew")
-        self.lbl_result = ctk.CTkLabel(self._result_inner, text="—", font=ctk.CTkFont(size=12, weight="bold"))
-        self.lbl_result.grid(row=1, column=0, sticky="w", padx=4, pady=2)
 
-        # Alsó vezérlőblokk a grid 3. sorában — így nincs üres rés a panelek és a gombok között
-        self.controls_frame = ctk.CTkFrame(self.main_frame, corner_radius=0, height=88)
-        self.controls_frame.grid(row=2, column=0, columnspan=3, padx=4, pady=(2, 4), sticky="ew")
-        self.controls_frame.grid_propagate(False)
-
-        self.btn_analyze = ctk.CTkButton(
-            self.controls_frame, text="Capture & Analyze (Space)", command=self.capture_and_analyze,
-            font=ctk.CTkFont(size=15, weight="bold"), fg_color=("#e74c3c", "#c0392b"), height=40,
+        self._readout = ctk.CTkFrame(self.result_panel_frame, fg_color="transparent")
+        self._readout.pack(anchor="center", padx=8, pady=(2, 8))
+        cap_font = ctk.CTkFont(size=13)
+        self.lbl_class_caption = ctk.CTkLabel(self._readout, text="Osztály", font=cap_font)
+        self.lbl_class_caption.grid(row=0, column=0, sticky="w", padx=(4, 16))
+        self.lbl_class_name = ctk.CTkLabel(
+            self._readout,
+            text="—",
+            font=ctk.CTkFont(size=28, weight="bold"),
+            text_color=_CLASS_COLORS["neutral"][0],
+            fg_color=_CLASS_COLORS["neutral"][1],
+            corner_radius=6,
+            padx=10,
+            pady=2,
         )
-        self.btn_analyze.pack(pady=4)
-
-        save_frame = ctk.CTkFrame(self.controls_frame, fg_color="transparent")
-        save_frame.pack(pady=2)
-        self.save_mode_var = tk.StringVar(value="manual")
-        self.save_mode_var.trace_add("write", lambda *_: self._update_save_button_state())
-        ctk.CTkRadioButton(
-            save_frame, text="Manuális mentés", variable=self.save_mode_var, value="manual"
-        ).pack(side=tk.LEFT, padx=10)
-        ctk.CTkRadioButton(
-            save_frame, text="Auto mentés", variable=self.save_mode_var, value="auto"
-        ).pack(side=tk.LEFT, padx=10)
-        self.btn_save = ctk.CTkButton(
-            save_frame, text="Mentés", command=self._manual_save,
-            fg_color=("#27ae60", "#27ae60"), width=100,
+        self.lbl_class_name.grid(row=1, column=0, sticky="w", padx=(4, 16), pady=(0, 4))
+        self.lbl_conf_caption = ctk.CTkLabel(self._readout, text="Konfidencia", font=cap_font)
+        self.lbl_conf_caption.grid(row=0, column=1, sticky="w", padx=(8, 16))
+        self.lbl_conf_value = ctk.CTkLabel(
+            self._readout,
+            text="—",
+            font=ctk.CTkFont(size=22, weight="bold"),
+            text_color=_CLASS_COLORS["neutral"][0],
         )
-        self.btn_save.pack(side=tk.LEFT, padx=10)
-
-        self.lbl_status = ctk.CTkLabel(
-            self.controls_frame, text="Rendszer inicializálása...", font=ctk.CTkFont(size=12)
+        self.lbl_conf_value.grid(row=1, column=1, sticky="w", padx=(8, 16))
+        self._seg_readout = ctk.CTkFrame(self._readout, fg_color="transparent")
+        self._seg_readout.grid(row=0, column=2, rowspan=2, sticky="nsw", padx=(8, 4))
+        ctk.CTkLabel(self._seg_readout, text="Szegmentáció", font=cap_font).pack(anchor="w")
+        self.lbl_seg_value = ctk.CTkLabel(
+            self._seg_readout,
+            text="—",
+            font=ctk.CTkFont(size=22, weight="bold"),
         )
-        self.lbl_status.pack(side=tk.BOTTOM, pady=2)
+        self.lbl_seg_value.pack(anchor="w")
+        self._seg_readout.grid_remove()
 
-        # Grid: sorok nem expandálnak — tartalom magassága, nincs felesleges rés
-        self.main_frame.columnconfigure(0, weight=1)
+        self.main_frame.columnconfigure(0, weight=0)
         self.main_frame.columnconfigure(1, weight=1)
-        self.main_frame.columnconfigure(2, weight=1)
         self.main_frame.rowconfigure(0, weight=0)
-        self.main_frame.rowconfigure(1, weight=0)
-        self.main_frame.rowconfigure(2, weight=0)
+        self.main_frame.rowconfigure(1, weight=1)
 
         self.root.bind('<space>', lambda e: self.capture_and_analyze())
+        self.root.bind('<m>', self._toggle_explain_overlay)
+        self.root.bind('<M>', self._toggle_explain_overlay)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
-        self.main_frame.bind('<Configure>', lambda e: self.root.after(50, self._apply_preview_size))
 
         self._update_save_button_state()
-
-        # Start Async Loading
         self.root.after(100, self._start_async_loading)
-        # Méretezés megnyitáskor — adaptív az oszlopszélességhez
-        self.root.after(150, self._apply_preview_size)
-
-        # Start Loop
         self.update_live_feed()
-
-    def _apply_preview_size(self):
-        """Megnyitáskor / átméretezés: oszlopszélesség alapján adaptív _preview_sz."""
-        if not hasattr(self, "_snapshot_inner"):
-            return
-        self.root.update_idletasks()
-        try:
-            w = self.main_frame.winfo_width()
-            if w > 100:
-                col = max(280, (w - 40) // 3)
-                sz = min(420, col - 24)
-                sz = max(280, sz)
-                if sz != self._preview_sz:
-                    self._preview_sz = sz
-                    fh = self._footer_row_h
-                    self._live_stack.configure(width=sz, height=sz)
-                    self._live_stack.grid_rowconfigure(0, minsize=sz - fh)
-                    self._snapshot_inner.configure(width=sz, height=sz)
-                    self._snapshot_inner.grid_rowconfigure(0, minsize=sz - fh)
-                    self._result_inner.configure(width=sz, height=sz)
-                    self._result_inner.grid_rowconfigure(0, minsize=sz - fh)
-        except tk.TclError:
-            pass
 
     def _start_async_loading(self):
         """Modellek betöltésének indítása külön szálon."""
@@ -880,14 +1322,20 @@ class App:
     def _update_loading_status(self, text):
         """Státusz frissítése a GUI szálon."""
         self.root.after(0, lambda t=text: self.lbl_status.configure(text=t))
-        if text == "Rendszer kész." or (isinstance(text, str) and text.startswith("HIBA:")):
+        if (
+            (isinstance(text, str) and text.startswith("Rendszer kész."))
+            or (isinstance(text, str) and text.startswith("HIBA:"))
+        ):
             self.root.after(500, lambda: self._set_ui_state("normal"))
+            # Klasszifikátor menü frissítése betöltés után
+            self.root.after(500, self._refresh_classifier_menu)
 
     def _set_ui_state(self, state):
         """Gombok tiltása/engedélyezése (CustomTkinter: 'normal' / 'disabled')."""
         self.btn_hdmi.configure(state=state)
         self.btn_sim.configure(state=state)
-        self.btn_model.configure(state=state)
+        self.seg_menu.configure(state=state)
+        self.clf_menu.configure(state=state)
         self.btn_analyze.configure(state=state)
         self.combo_cam.configure(state="disabled" if state == "disabled" else "readonly")
         if state == "normal":
@@ -955,17 +1403,240 @@ class App:
         """Auto módban Mentés gomb letiltása."""
         self.btn_save.configure(state="normal" if self.save_mode_var.get() == "manual" else "disabled")
 
-    def toggle_model(self):
-        if self.model_var.get() == "deeplab":
-            self.model_var.set("unet")
-            self.analyzer.switch_model("unet")
-            self.btn_model.configure(text="Model: U-Net", fg_color=("#d35400", "#d35400"))
-            self.lbl_status.configure(text="Aktív modell: U-Net (ResNet34, epoch 22)")
+    def _on_seg_model_change(self, choice):
+        model_type = self._seg_labels.get(choice, "deeplab")
+        self.analyzer.switch_model(model_type)
+        if model_type == "unet":
+            self.lbl_status.configure(text="Szegmentáló: U-Net (ResNet34)")
         else:
-            self.model_var.set("deeplab")
-            self.analyzer.switch_model("deeplab")
-            self.btn_model.configure(text="Model: DeepLabV3+", fg_color=("#8e44ad", "#8e44ad"))
-            self.lbl_status.configure(text="Aktív modell: DeepLabV3+ (MobileNet, 0409 epoch 31)")
+            self.lbl_status.configure(text="Szegmentáló: DeepLabV3+ (MobileNet)")
+
+    def _on_explain_mode_change(self, choice):
+        mode = self._explain_labels.get(choice, "classification")
+        if mode != "off":
+            self._explain_last_mode = mode
+        self.analyzer.explain_mode = mode
+        self._show_cached_overlay(mode)
+
+    def _toggle_explain_overlay(self, _event=None):
+        """M: a legutóbbi magyarázat és a Ki állapot között vált, új elemzés nélkül."""
+        if self.analyzer.explain_mode == "off":
+            mode = self._explain_last_mode or "classification"
+        else:
+            self._explain_last_mode = self.analyzer.explain_mode
+            mode = "off"
+        inv = {v: k for k, v in self._explain_labels.items()}
+        label = inv.get(mode, "Ki")
+        self.explain_var.set(label)
+        self._on_explain_mode_change(label)
+        return "break"
+
+    def _on_classifier_change(self, choice):
+        """Modell legördülő: ViT → csak full-frame cls (nincs szeg); ResNet → szeg+ROI."""
+        backend = self._clf_labels.get(choice, "vit")
+        applied = self.analyzer.switch_classifier_backend(backend)
+        inv = {v: k for k, v in self._clf_labels.items()}
+        self.clf_var.set(inv.get(applied, choice))
+        self._sync_seg_menu_for_classifier()
+        self._reset_result_panel_for_classifier()
+        if applied == "vit":
+            self.lbl_status.configure(
+                text="Modell: ViT-B/16 — Space: full-frame klasszifikáció (szegmentálás nélkül)"
+            )
+        else:
+            self.lbl_status.configure(
+                text="Modell: ResNet50V2 — Space: szegmentálás + ROI klasszifikáció"
+            )
+
+    def _reset_result_panel_for_classifier(self):
+        """Modellváltáskor: régi heatmap/cache érvénytelen, panel cím + placeholder."""
+        self._next_explain_generation()
+        self._overlay_cache = {
+            "base": None,
+            "classification": None,
+            "segmentation": None,
+        }
+        self._overlay_cache_gen = -1
+        self._last_seg_rgb = None
+        self._seg_image_ref = None
+        if self.analyzer.classifier_backend == "vit":
+            title = "Eredmény (teljes kép)"
+            placeholder = "Space → teljes kép"
+        else:
+            title = "Eredmény"
+            placeholder = "Space → szegmentálás + ROI"
+        if hasattr(self.result_panel_frame, "_title_label"):
+            self.result_panel_frame._title_label.configure(text=title)
+        self.result_panel.configure(image=None, text=placeholder)
+        self._apply_readout(None)
+
+    def _sync_seg_menu_for_classifier(self):
+        """ViT módban a szegmentáló menü nem releváns — tiltva."""
+        if self.analyzer.classifier_backend == "vit" and self.analyzer.vit_classifier is not None:
+            self.seg_menu.configure(state="disabled")
+        else:
+            self.seg_menu.configure(state="normal")
+
+    def _refresh_classifier_menu(self):
+        """Betöltés után: csak a ténylegesen betöltött klasszifikátorok a Modell listában."""
+        values = []
+        if self.analyzer.vit_classifier is not None:
+            values.append("ViT-B/16")
+        if self.analyzer.classifier is not None:
+            values.append("ResNet50V2")
+        if not values:
+            self.clf_menu.configure(values=["—"], state="disabled")
+            self.clf_var.set("—")
+            self.seg_menu.configure(state="normal")
+            return
+        self.clf_menu.configure(values=values, state="normal")
+        inv = {v: k for k, v in self._clf_labels.items()}
+        default = inv.get(self.analyzer.classifier_backend, values[0])
+        if default not in values:
+            default = values[0]
+            self.analyzer.switch_classifier_backend(self._clf_labels[default])
+        self.clf_var.set(default)
+        self._sync_seg_menu_for_classifier()
+        self._reset_result_panel_for_classifier()
+
+    def _next_explain_generation(self):
+        self._explain_generation += 1
+        return self._explain_generation
+
+    def _apply_readout(self, cls_res, conf=None, seg_conf=None):
+        """Osztály, konfidencia és (ResNet úton) szegmentáció. JNET nincs a feliraton."""
+        if cls_res is None:
+            name, kind = "—", "neutral"
+            conf_txt = "—"
+        else:
+            name, kind = display_class_name(cls_res)
+            conf_txt = "—" if conf is None else f"{conf * 100:.1f}%"
+        fg, bg = _CLASS_COLORS[kind]
+        self.lbl_class_name.configure(text=name, text_color=fg, fg_color=bg)
+        self.lbl_conf_value.configure(text=conf_txt, text_color=fg)
+        if self.analyzer.classifier_backend == "vit":
+            self._seg_readout.grid_remove()
+            return
+        self._seg_readout.grid()
+        seg_txt = "—" if seg_conf is None else f"{seg_conf * 100:.1f}%"
+        self.lbl_seg_value.configure(text=seg_txt)
+
+    def _fit_rgb_square(self, rgb, side):
+        """Négyzetes kijelzés, az arány megmarad. A modell bemenetét nem ez adja."""
+        h, w = rgb.shape[:2]
+        if h < 1 or w < 1:
+            return np.zeros((side, side, 3), dtype=np.uint8)
+        scale = min(side / h, side / w)
+        nw = max(1, min(side, int(w * scale)))
+        nh = max(1, min(side, int(h * scale)))
+        resized = cv2.resize(rgb, (nw, nh), interpolation=cv2.INTER_NEAREST)
+        if nw == side and nh == side:
+            return resized
+        canvas = np.zeros((side, side, 3), dtype=np.uint8)
+        y0 = (side - nh) // 2
+        x0 = (side - nw) // 2
+        canvas[y0:y0 + nh, x0:x0 + nw] = resized
+        return canvas
+
+    def _update_seg_panel_image(self, segmented_rgb):
+        self._last_seg_rgb = segmented_rgb
+        sz = self._result_img_side
+        fitted = self._fit_rgb_square(segmented_rgb, sz)
+        seg_img = Image.fromarray(fitted)
+        self._seg_image_ref = ctk.CTkImage(
+            light_image=seg_img, dark_image=seg_img, size=(sz, sz)
+        )
+        self.result_panel.configure(image=self._seg_image_ref, text="")
+
+    def _set_snap_panel_image(self, snap_rgb):
+        self._last_snap_rgb = snap_rgb
+        sz = self._snap_img_side
+        fitted = self._fit_rgb_square(snap_rgb, sz)
+        snap_img = Image.fromarray(fitted)
+        self._snap_image_ref = ctk.CTkImage(
+            light_image=snap_img, dark_image=snap_img, size=(sz, sz)
+        )
+        self.snapshot_panel.configure(image=self._snap_image_ref, text="")
+
+    def _show_cached_overlay(self, mode=None):
+        """Megjeleníti a választott réteget a cache-ből (off = base maszk)."""
+        if mode is None:
+            mode = self.analyzer.explain_mode
+        if self._overlay_cache_gen != self._explain_generation:
+            return
+        if mode == "off":
+            img = self._overlay_cache.get("base")
+        else:
+            img = self._overlay_cache.get(mode)
+            if img is None:
+                img = self._overlay_cache.get("base")
+        if img is not None:
+            self._update_seg_panel_image(img)
+
+    def _store_overlay(self, mode, display_rgb, gen, explain_ms=0.0):
+        """Háttérszálról: cache frissítés + ha ez az aktív mód, panel frissítés."""
+        if gen != self._explain_generation:
+            return
+        self._overlay_cache[mode] = display_rgb
+        if self.analyzer.explain_mode == mode:
+            self._update_seg_panel_image(display_rgb)
+            if explain_ms > 0:
+                status = self.lbl_status.cget("text")
+                # Ne duplázza a heatmap sort
+                base_status = status.split(" | Heatmap")[0]
+                self.lbl_status.configure(
+                    text=f"{base_status} | Heatmap ({mode[:3]}) +{explain_ms:.0f}ms"
+                )
+
+    def _schedule_heatmap(self, ctx, gen):
+        """Mindkét Grad-CAM elkészül; a bejelölt mód előbb, a másik utána. Váltás cache-ből."""
+        if ctx is None or ctx.bbox is None:
+            return
+
+        # Base maszk azonnal a cache-ben (Ki módhoz)
+        self._overlay_cache = {
+            "base": ctx.segmented_polyp.copy(),
+            "classification": None,
+            "segmentation": None,
+        }
+        self._overlay_cache_gen = gen
+
+        preferred = self.analyzer.explain_mode
+        # ViT: nincs szegmentáció → csak klasszifikációs attention
+        if self.analyzer.classifier_backend == "vit":
+            order = ["classification"]
+        elif preferred == "off":
+            order = ["classification", "segmentation"]
+        elif preferred == "segmentation":
+            order = ["segmentation", "classification"]
+        else:
+            order = ["classification", "segmentation"]
+
+        def worker():
+            with self._explain_lock:
+                if gen != self._explain_generation:
+                    return
+                for mode in order:
+                    if gen != self._explain_generation:
+                        return
+                    display_rgb, explain_ms = self.analyzer.compute_heatmap(ctx, mode)
+                    if display_rgb is None:
+                        continue
+                    self.root.after(
+                        0,
+                        lambda d=display_rgb, m=mode, g=gen, e=explain_ms: self._store_overlay(
+                            m, d, g, e
+                        ),
+                    )
+                # Tenzorok felszabadítása mindkét map után
+                try:
+                    ctx.input_tensor = None
+                    ctx.roi_batch = None
+                    ctx.vit_input_tensor = None
+                except Exception:
+                    pass
+
+        threading.Thread(target=worker, daemon=True, name="heatmap-worker").start()
 
     def start_source(self, sim=False):
         if self.video_thread:
@@ -1021,8 +1692,7 @@ class App:
             return
         self._video_slider_packed = True
         self.video_slider.configure(state="normal")
-        self._live_stack.grid_rowconfigure(1, minsize=self._footer_row_h)
-        self.video_slider.grid(row=1, column=0, sticky="ew", padx=2, pady=(4, 0))
+        self.video_slider.grid(row=1, column=0, sticky="ew", padx=2, pady=(2, 0))
 
     def _hide_video_slider(self):
         """Csúszka elrejtése (kamera / szimuláció / nincs videó)."""
@@ -1032,7 +1702,6 @@ class App:
             self.video_slider.configure(state="disabled")
             if self._video_slider_packed:
                 self.video_slider.grid_remove()
-                self._live_stack.grid_rowconfigure(1, minsize=0)
                 self._video_slider_packed = False
         finally:
             self._slider_updating = False
@@ -1050,61 +1719,66 @@ class App:
 
     def update_live_feed(self):
         # UI update rate can be independent of video FPS, e.g. 30 FPS (33ms)
-        delay = 33 
-        
-        if self.video_thread:
-            ret, frame = self.video_thread.read()
-            if ret and frame is not None:
-                h, w = frame.shape[:2]
-                tgt = self._preview_sz
-                row_h = self._footer_row_h
-                vf = self.video_thread.video_file_mode
-                # Fájl + csúszka: a kép kisebb, a csúszka külön sorban; összmagasság ≈ tgt → nem nő az ablak
-                if vf and self._video_slider_packed:
-                    img_h = max(1, tgt - row_h)
-                else:
-                    img_h = tgt
-                scale = min(img_h / h, tgt / w)
-                display_w = max(1, min(tgt, int(w * scale)))
-                display_h = max(1, min(img_h, int(h * scale)))
+        delay = 33
+        try:
+            if self.video_thread:
+                ret, frame = self.video_thread.read()
+                if ret and frame is not None:
+                    h, w = frame.shape[:2]
+                    tgt = self._live_img_side
+                    scale = min(tgt / h, tgt / w)
+                    display_w = max(1, min(tgt, int(w * scale)))
+                    display_h = max(1, min(tgt, int(h * scale)))
 
-                frame_resized = cv2.resize(frame, (display_w, display_h))
+                    frame_resized = cv2.resize(frame, (display_w, display_h))
 
-                frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
-                img = Image.fromarray(frame_rgb)
-                self._live_image_ref = ctk.CTkImage(
-                    light_image=img, dark_image=img, size=(max(1, display_w), max(1, display_h))
-                )
-                self.live_panel.configure(image=self._live_image_ref, text="")
-                self._live_stack.configure(width=tgt, height=tgt)
+                    frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+                    img = Image.fromarray(frame_rgb)
+                    self._live_image_ref = ctk.CTkImage(
+                        light_image=img, dark_image=img, size=(max(1, display_w), max(1, display_h))
+                    )
+                    self.live_panel.configure(image=self._live_image_ref, text="")
 
-                # Live Analysis Trigger
-                if self.check_live_analysis_var.get() and self.analyzer.models_loaded:
-                    if not getattr(self, '_is_analyzing_live', False):
-                        self._is_analyzing_live = True
-                        threading.Thread(target=self._async_live_analyze, args=(frame, display_w, display_h), daemon=True).start()
+                    # Live Analysis: csak szeg+klassz — heatmap NINCS (CPU/memória, élőkép)
+                    if self.check_live_analysis_var.get() and self.analyzer.models_loaded:
+                        if not getattr(self, '_is_analyzing_live', False):
+                            self._is_analyzing_live = True
+                            threading.Thread(
+                                target=self._async_live_analyze,
+                                args=(frame, display_w, display_h),
+                                daemon=True,
+                            ).start()
 
-            # Videófájl: csúszka követi a lejátszást (user húzás közben ~0.5s szünet)
-            if (
-                self.video_thread
-                and self.video_thread.video_file_mode
-                and time.time() >= self._slider_user_until
-            ):
-                pct = self.video_thread.get_position_percent()
-                if pct is not None:
-                    self._slider_updating = True
-                    try:
-                        self.video_slider.set(pct)
-                    finally:
-                        self._slider_updating = False
-        
-        self.root.after(delay, self.update_live_feed)
+                # Videófájl: csúszka követi a lejátszást (user húzás közben ~0.5s szünet)
+                if (
+                    self.video_thread
+                    and self.video_thread.video_file_mode
+                    and time.time() >= self._slider_user_until
+                ):
+                    pct = self.video_thread.get_position_percent()
+                    if pct is not None:
+                        self._slider_updating = True
+                        try:
+                            self.video_slider.set(pct)
+                        finally:
+                            self._slider_updating = False
+        except Exception as e:
+            # Kritikus: exception NE törje el az after() láncot → bal panel ne fagyjon be
+            print(f"Live feed update error: {e}")
+        finally:
+            try:
+                self.root.after(delay, self.update_live_feed)
+            except Exception:
+                pass
 
     def _async_live_analyze(self, frame, display_w, display_h):
-        # Háttérben lefut az elemzés, majd a főszálra ütemezi a megjelenítést
+        # Élő mód: csak gyors predikció — Grad-CAM szándékosan kihagyva
         try:
-            results = self.analyzer.analyze(frame)
-            self.root.after(0, lambda: self._apply_live_analysis_result(frame, display_w, display_h, results))
+            results, _ctx = self.analyzer.analyze_with_context(frame)
+            self.root.after(
+                0,
+                lambda: self._apply_live_analysis_result(frame, display_w, display_h, results),
+            )
         except Exception as e:
             print(f"Élő elemzés hiba: {e}")
             self.root.after(0, lambda: setattr(self, '_is_analyzing_live', False))
@@ -1121,44 +1795,46 @@ class App:
             segmented_polyp, cls_res, conf, trans_img_vis, seg_conf = self.analyzer.analyze(frame)
         
         # 1. Update Network Input Panel — egységes méret a többi panelhoz
-        sz = self._preview_sz - self._footer_row_h
-        trans_img_pil = Image.fromarray(trans_img_vis)
-        trans_img_resized = trans_img_pil.resize((sz, sz), Image.NEAREST)
-        self._snap_image_ref = ctk.CTkImage(
-            light_image=trans_img_resized, dark_image=trans_img_resized, size=(sz, sz)
-        )
-        self.snapshot_panel.configure(image=self._snap_image_ref, text="")
+        self._set_snap_panel_image(trans_img_vis)
         
-        # 2. Update Segmentation Panel
-        seg_img = Image.fromarray(segmented_polyp)
-        seg_img_resized = seg_img.resize((sz, sz), Image.NEAREST)
-        self._seg_image_ref = ctk.CTkImage(
-            light_image=seg_img_resized, dark_image=seg_img_resized, size=(sz, sz)
-        )
-        self.result_panel.configure(image=self._seg_image_ref, text="")
+        # 2. Update Segmentation / ViT Panel (phase 1: mask or full frame)
+        self._update_seg_panel_image(segmented_polyp)
 
-        self.lbl_result.configure(
-            text=f"Szegm.: {seg_conf*100:.1f}% | {cls_res} ({conf*100:.1f}%)"
-        )
+        if self.analyzer.classifier_backend == "vit":
+            if hasattr(self.result_panel_frame, "_title_label"):
+                self.result_panel_frame._title_label.configure(text="Eredmény (teljes kép)")
+            self._apply_readout(cls_res, conf, None)
+        else:
+            if hasattr(self.result_panel_frame, "_title_label"):
+                self.result_panel_frame._title_label.configure(text="Eredmény")
+            self._apply_readout(cls_res, conf, seg_conf)
 
     def capture_and_analyze(self):
         if not self.video_thread:
              self.lbl_status.configure(text="Please select a source first!")
              return
 
-        self.lbl_status.configure(text="Analyzing... Please wait.")
-        self.btn_analyze.configure(state="disabled") # Gomb letiltása amíg dolgozik
-        self.root.update_idletasks() # Force UI update
-        
-        # Get snapshot
+        self.lbl_status.configure(text="Kép rögzítése...")
+        self.btn_analyze.configure(state="disabled")
+        self.root.update_idletasks()
+
         ret, frame = self.video_thread.read()
         if not ret or frame is None:
             self.lbl_status.configure(text="Error: No video frame available.")
             self.btn_analyze.configure(state="normal")
             return
 
+        preview_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        self._set_snap_panel_image(preview_rgb)
+        self._update_seg_panel_image(preview_rgb)
+        self._apply_readout(None)
+        self.lbl_class_name.configure(text="Elemzés...")
+        self._next_explain_generation()
+        self.lbl_status.configure(text="Kép elkészült, elemzés...")
+        self.root.update_idletasks()
+
         h, w = frame.shape[:2]
-        display_h = self._preview_sz - self._footer_row_h
+        display_h = self._snap_img_side
         scale = display_h / h
         display_w = int(w * scale)
         
@@ -1166,13 +1842,26 @@ class App:
         threading.Thread(target=self._async_analyze, args=(frame, display_w, display_h), daemon=True).start()
 
     def _async_analyze(self, frame, display_w, display_h):
+        gen = self._next_explain_generation()
         start_time = time.time()
-        # Elemzés lefut a háttérszálon...
-        results = self.analyzer.analyze(frame)
-        elapsed = time.time() - start_time
-        
-        # UI frissítések a main szálra ütemezve
-        self.root.after(0, lambda: self._apply_analysis_result(frame, display_w, display_h, results, elapsed))
+        try:
+            results, ctx = self.analyzer.analyze_with_context(frame)
+            elapsed = time.time() - start_time
+            # Phase 1 azonnal — gomb / élőkép nem vár heatmapre
+            self.root.after(
+                0,
+                lambda: self._apply_analysis_result(frame, display_w, display_h, results, elapsed),
+            )
+            # Phase 2: Grad-CAM külön szálon (nem ezen a workeren)
+            self._schedule_heatmap(ctx, gen)
+        except Exception as e:
+            print(f"Elemzés hiba: {e}")
+            import traceback
+            traceback.print_exc()
+            self.root.after(0, lambda: (
+                self.lbl_status.configure(text=f"Hiba: {e}"),
+                self.btn_analyze.configure(state="normal"),
+            ))
 
     def _apply_analysis_result(self, frame, display_w, display_h, results, elapsed):
         segmented_polyp, cls_res, conf, trans_img_vis, seg_conf = results
@@ -1186,7 +1875,8 @@ class App:
         if self.save_mode_var.get() == "auto":
             self._save_results(*self._last_result)
         
-        self.lbl_status.configure(text=f"Result: {cls_res} ({conf*100:.1f}%) | Processing Time: {elapsed:.3f}s")
+        shown, _kind = display_class_name(cls_res)
+        self.lbl_status.configure(text=f"{shown} ({conf*100:.1f}%) | {elapsed:.3f} s")
         self.btn_analyze.configure(state="normal")
 
     def on_close(self):

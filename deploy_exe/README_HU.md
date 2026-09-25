@@ -31,8 +31,9 @@ A nagy fájlokat (`.pth`, `.keras`) **nem kötelező** az exe „belsejébe” t
 
 ## 4. Mit visz át a másik laptopra?
 
-- A **teljes `dist\...\` mappát** (zip / pendrive), **plusz** a fenti modellek mappái, ha nem voltak a buildben.
-- Opcionális: **Microsoft Visual C++ Redistributable** (x64), ha OpenCV/Torch miatt hiányzik DLL.
+GitHub és Python nélkül: a build gépen `.\deploy_exe\build_installer.ps1` (csak `zenbook_venv`, Python 3.11). A kész mappa a OneDrive-on kívül jön létre: `%LOCALAPPDATA%\LiveCapture-build\dist\LiveCapture` (exe, `_internal`, három modellmappa, `INDITAS.txt`). A script ebből zipet is ír ugyanoda, és bemásolja a repó `dist` mappájába, ha van hely. A másik gépen a mappát vagy a zipet másolod, és a `LiveCapture.exe` indul. Ha az Inno Setup `ISCC.exe` telepítve van, ugyanebből készül a `dist\LiveCapture-setup.exe` varázsló is. A pendrive-os másoláshoz a mappa elég.
+
+- Opcionális: **Microsoft Visual C++ Redistributable** (x64), ha OpenCV/Torch miatt hiányzik DLL. A zipben lévő `INDITAS.txt` ezt leírja.
 
 ## 5. Python verzió – ugyanaz legyen, mint a zenbook venvben
 

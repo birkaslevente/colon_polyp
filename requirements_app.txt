@@ -1,6 +1,6 @@
 #
 # Minimális futtatási függőségek a GUI apphoz (`live_capture_app.py`)
-# és a feature-map vizualizációhoz (`visualize_features.py`).
+# és a feature-map vizualizációhoz (`scripts/tools/visualize_features.py`).
 #
 # Telepítés:
 #   python -m pip install -r requirements_app.txt

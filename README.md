@@ -16,6 +16,7 @@ Ez a repó a szakdolgozatban használt fejlesztési környezetet tartalmazza:
 | `APP_USAGE_HU.md` | Élő alkalmazás használata (források, gombok, mentés) |
 | `deploy_exe/README_HU.md` | PyInstaller build, másik gépen futtatás |
 | `deploy_exe/MODELLOK_MASOLASA.txt` | Betanított súlyok másolása exe mellé |
+| `scripts/README.md` | Segédscriptek / tesztek / train (almappák) |
 
 ## Fontos korlát
 
