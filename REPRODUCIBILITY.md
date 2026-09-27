@@ -7,6 +7,7 @@ Ez a dokumentum az egyetemi reprodukálhatósági követelmények teljesítésé
 - Tanítási notebookok:
   - `colon_short_szd_r.ipynb` (DeepLabV3+)
   - `colon_short_szd_r U-net.ipynb` (U-Net)
+  - `colon_short_szd_r_hardnet_mseg.ipynb` (HarDNet-MSEG — checkpointok: `checkpoints_hardnet/`)
 - Valós idejű alkalmazás:
   - `live_capture_app.py`
 - Függőségek:
@@ -54,6 +55,7 @@ python -m pip install pygrabber
 2. Állítsd be a lokális adatútvonalakat a saját környezetedre.
 3. Futtasd a cellákat sorrendben.
 4. Ugyanígy futtasd az `colon_short_szd_r U-net.ipynb` notebookot is.
+5. HarDNet-MSEG: `colon_short_szd_r_hardnet_mseg.ipynb` — előtanított HarDNet-68 (`hardnet68.pth`) útvonal: `HARDNET68_PRETRAINED_PATH` (lásd `network/hardnet_mseg/UPSTREAM.md`).
 
 Megjegyzés: a repóban szereplő notebookok a tanítási folyamatot és a kiértékelést tartalmazzák, de a forrásadatokat nem.
 
