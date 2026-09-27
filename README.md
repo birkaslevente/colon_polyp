@@ -2,7 +2,7 @@
 
 Ez a repó a szakdolgozatban használt fejlesztési környezetet tartalmazza:
 
-- notebookos tanítás (`colon_short_szd_r.ipynb`, `colon_short_szd_r U-net.ipynb`),
+- notebookos tanítás (`colon_short_szd_r.ipynb`, `colon_short_szd_r U-net.ipynb`, `colon_short_szd_r_hardnet_mseg.ipynb`),
 - valós idejű alkalmazás (`live_capture_app.py`),
 - reprodukálhatósági és használati dokumentáció.
 
@@ -13,6 +13,7 @@ Ez a repó a szakdolgozatban használt fejlesztési környezetet tartalmazza:
 | `requirements_train.txt` | Tanítási függőségek |
 | `requirements_app.txt` | Alkalmazás függőségek |
 | `REPRODUCIBILITY.md` | Reprodukálhatóság, környezet, seed |
+| `colon_short_szd_r_hardnet_mseg.ipynb` | HarDNet-MSEG tanítás + benchmark (`checkpoints_hardnet/`) |
 | `APP_USAGE_HU.md` | Élő alkalmazás használata (források, gombok, mentés) |
 | `deploy_exe/README_HU.md` | PyInstaller build, másik gépen futtatás |
 | `deploy_exe/MODELLOK_MASOLASA.txt` | Betanított súlyok másolása exe mellé |
@@ -40,7 +41,8 @@ A `pygrabber` a DirectShow alapú kameralista Windows-on; nélküle index alapú
 ```bash
 .venv\Scripts\activate
 python -m pip install -r requirements_train.txt
-# Jupyter: colon_short_szd_r.ipynb (DeepLabV3+), colon_short_szd_r U-net.ipynb (U-Net)
+# Jupyter: colon_short_szd_r.ipynb (DeepLabV3+), colon_short_szd_r U-net.ipynb (U-Net),
+#          colon_short_szd_r_hardnet_mseg.ipynb (HarDNet-MSEG)
 ```
 
 A checkpointok alapértelmezés szerint a `checkpoints_0409/` mappába kerülnek; az alkalmazás ezeket tölti be.

@@ -2,6 +2,7 @@
 # Függőségek a notebookos tanításhoz/kiértékeléshez:
 #   - colon_short_szd_r.ipynb
 #   - colon_short_szd_r U-net.ipynb
+#   - colon_short_szd_r_hardnet_mseg.ipynb
 #
 # Telepítés:
 #   python -m pip install -r requirements_train.txt

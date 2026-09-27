@@ -35,6 +35,7 @@ checkpoints_bak/
 checkpoints/
 checkpoints_unet/
 checkpoints_0409/
+checkpoints_hardnet/
 classificator_models/
 external_models/
 polyp_trained_e12_best_deeplabv3plus_mobilenet_voc_os16/
@@ -92,6 +93,7 @@ checkpoints_unet/*
 **/*.ipynb
 !colon_short_szd_r.ipynb
 !colon_short_szd_r U-net.ipynb
+!colon_short_szd_r_hardnet_mseg.ipynb
 **/*.bat
 # Kivetelek a TDK_Beta.latex buildhez
 !tdk/sze_logo.png
