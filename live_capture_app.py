@@ -1049,6 +1049,8 @@ class App:
         self.video_thread = None
         self._last_result = None
         self._is_analyzing_live = False # Flag a live analysishoz
+        self._analysis_busy = False
+        self._clf_change_guard = False
         self._explain_generation = 0
         # Heatmap külön szálon, sorosan — soha ne blokkolja az élőképet / phase-1-et
         self._explain_lock = threading.Lock()
@@ -1305,7 +1307,7 @@ class App:
         self.main_frame.rowconfigure(0, weight=0)
         self.main_frame.rowconfigure(1, weight=1)
 
-        self.root.bind('<space>', lambda e: self.capture_and_analyze())
+        self.root.bind_all('<Key-space>', self._on_space_key)
         self.root.bind('<m>', self._toggle_explain_overlay)
         self.root.bind('<M>', self._toggle_explain_overlay)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -1431,13 +1433,44 @@ class App:
         self._on_explain_mode_change(label)
         return "break"
 
+    def _on_space_key(self, event):
+        """Space bárhonnan, a legördülő fókusza után is. Beviteli mezőben nem nyeljük le."""
+        if getattr(event, "repeat", False) or self._analysis_busy:
+            return "break"
+        if isinstance(event.widget, (tk.Entry, tk.Text)):
+            return None
+        self.capture_and_analyze()
+        return "break"
+
     def _on_classifier_change(self, choice):
-        """Modell legördülő: ViT → csak full-frame cls (nincs szeg); ResNet → szeg+ROI."""
-        backend = self._clf_labels.get(choice, "vit")
-        applied = self.analyzer.switch_classifier_backend(backend)
-        inv = {v: k for k, v in self._clf_labels.items()}
-        self.clf_var.set(inv.get(applied, choice))
+        """Modell legördülő: ViT → csak full-frame cls (nincs szeg); ResNet → szeg+ROI.
+
+        A menü parancsa közben nem rajzolunk: a CustomTkinter _draw update_idletasks-ot
+        hív, és a még nyitott menü fogása beragad. A felület a menü bezárása után frissül.
+        """
+        if self._clf_change_guard:
+            return
+        self._clf_change_guard = True
+        try:
+            backend = self._clf_labels.get(choice, "vit")
+            applied = self.analyzer.switch_classifier_backend(backend)
+            if applied != "vit":
+                seg_choice = self.seg_var.get()
+                model_type = self._seg_labels.get(seg_choice, "deeplab")
+                self.analyzer.switch_model(model_type)
+        finally:
+            self._clf_change_guard = False
+        self.root.after(50, lambda applied=applied: self._finish_classifier_switch_ui(applied))
+
+    def _finish_classifier_switch_ui(self, applied):
+        """Menü bezárása után: szegmentáló, Elemzés gomb, fókusz, placeholder."""
+        try:
+            self.root.grab_release()
+        except tk.TclError:
+            pass
         self._sync_seg_menu_for_classifier()
+        if not self._analysis_busy:
+            self.btn_analyze.configure(state="normal")
         self._reset_result_panel_for_classifier()
         if applied == "vit":
             self.lbl_status.configure(
@@ -1447,6 +1480,10 @@ class App:
             self.lbl_status.configure(
                 text="Modell: ResNet50V2 — Space: szegmentálás + ROI klasszifikáció"
             )
+        try:
+            self.root.focus_set()
+        except tk.TclError:
+            pass
 
     def _reset_result_panel_for_classifier(self):
         """Modellváltáskor: régi heatmap/cache érvénytelen, panel cím + placeholder."""
@@ -1458,7 +1495,6 @@ class App:
         }
         self._overlay_cache_gen = -1
         self._last_seg_rgb = None
-        self._seg_image_ref = None
         if self.analyzer.classifier_backend == "vit":
             title = "Eredmény (teljes kép)"
             placeholder = "Space → teljes kép"
@@ -1467,7 +1503,11 @@ class App:
             placeholder = "Space → szegmentálás + ROI"
         if hasattr(self.result_panel_frame, "_title_label"):
             self.result_panel_frame._title_label.configure(text=title)
-        self.result_panel.configure(image=None, text=placeholder)
+        blank = Image.new("RGB", (4, 4), (0, 0, 0))
+        self._seg_image_ref = ctk.CTkImage(
+            light_image=blank, dark_image=blank, size=(4, 4)
+        )
+        self._set_ctk_label_image(self.result_panel, self._seg_image_ref, placeholder)
         self._apply_readout(None)
 
     def _sync_seg_menu_for_classifier(self):
@@ -1538,6 +1578,16 @@ class App:
         canvas[y0:y0 + nh, x0:x0 + nw] = resized
         return canvas
 
+    def _set_ctk_label_image(self, panel, ctk_image, text):
+        """A tk címke régi PhotoImage-ét előbb levesszük, különben a configure elhasal."""
+        label = getattr(panel, "_label", None)
+        if label is not None:
+            try:
+                label.configure(image="")
+            except tk.TclError:
+                pass
+        panel.configure(image=ctk_image, text=text)
+
     def _update_seg_panel_image(self, segmented_rgb):
         self._last_seg_rgb = segmented_rgb
         sz = self._result_img_side
@@ -1546,7 +1596,7 @@ class App:
         self._seg_image_ref = ctk.CTkImage(
             light_image=seg_img, dark_image=seg_img, size=(sz, sz)
         )
-        self.result_panel.configure(image=self._seg_image_ref, text="")
+        self._set_ctk_label_image(self.result_panel, self._seg_image_ref, "")
 
     def _set_snap_panel_image(self, snap_rgb):
         self._last_snap_rgb = snap_rgb
@@ -1556,7 +1606,7 @@ class App:
         self._snap_image_ref = ctk.CTkImage(
             light_image=snap_img, dark_image=snap_img, size=(sz, sz)
         )
-        self.snapshot_panel.configure(image=self._snap_image_ref, text="")
+        self._set_ctk_label_image(self.snapshot_panel, self._snap_image_ref, "")
 
     def _show_cached_overlay(self, mode=None):
         """Megjeleníti a választott réteget a cache-ből (off = base maszk)."""
@@ -1737,7 +1787,7 @@ class App:
                     self._live_image_ref = ctk.CTkImage(
                         light_image=img, dark_image=img, size=(max(1, display_w), max(1, display_h))
                     )
-                    self.live_panel.configure(image=self._live_image_ref, text="")
+                    self._set_ctk_label_image(self.live_panel, self._live_image_ref, "")
 
                     # Live Analysis: csak szeg+klassz — heatmap NINCS (CPU/memória, élőkép)
                     if self.check_live_analysis_var.get() and self.analyzer.models_loaded:
@@ -1815,20 +1865,28 @@ class App:
              return
 
         self.lbl_status.configure(text="Kép rögzítése...")
+        self._analysis_busy = True
         self.btn_analyze.configure(state="disabled")
         self.root.update_idletasks()
 
         ret, frame = self.video_thread.read()
         if not ret or frame is None:
+            self._analysis_busy = False
             self.lbl_status.configure(text="Error: No video frame available.")
             self.btn_analyze.configure(state="normal")
             return
 
         preview_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        self._set_snap_panel_image(preview_rgb)
-        self._update_seg_panel_image(preview_rgb)
-        self._apply_readout(None)
-        self.lbl_class_name.configure(text="Elemzés...")
+        try:
+            self._set_snap_panel_image(preview_rgb)
+            self._update_seg_panel_image(preview_rgb)
+            self._apply_readout(None)
+            self.lbl_class_name.configure(text="Elemzés...")
+        except Exception as e:
+            self._analysis_busy = False
+            self.btn_analyze.configure(state="normal")
+            self.lbl_status.configure(text=f"Hiba: {e}")
+            return
         self._next_explain_generation()
         self.lbl_status.configure(text="Kép elkészült, elemzés...")
         self.root.update_idletasks()
@@ -1858,29 +1916,35 @@ class App:
             print(f"Elemzés hiba: {e}")
             import traceback
             traceback.print_exc()
-            self.root.after(0, lambda: (
-                self.lbl_status.configure(text=f"Hiba: {e}"),
-                self.btn_analyze.configure(state="normal"),
-            ))
+            self.root.after(0, lambda err=e: self._finish_analysis_error(err))
+
+    def _finish_analysis_error(self, err):
+        self._analysis_busy = False
+        self.lbl_status.configure(text=f"Hiba: {err}")
+        self.btn_analyze.configure(state="normal")
 
     def _apply_analysis_result(self, frame, display_w, display_h, results, elapsed):
-        segmented_polyp, cls_res, conf, trans_img_vis, seg_conf = results
-        # Store for manual save
-        self._last_result = (frame, trans_img_vis, segmented_polyp, cls_res, conf, seg_conf)
-        
-        # Update UI
-        self.run_analysis_on_frame(frame, display_w, display_h, results=results)
-        
-        # Auto save if enabled
-        if self.save_mode_var.get() == "auto":
-            self._save_results(*self._last_result)
-        
-        shown, _kind = display_class_name(cls_res)
-        self.lbl_status.configure(text=f"{shown} ({conf*100:.1f}%) | {elapsed:.3f} s")
-        self.btn_analyze.configure(state="normal")
+        try:
+            segmented_polyp, cls_res, conf, trans_img_vis, seg_conf = results
+            self._last_result = (frame, trans_img_vis, segmented_polyp, cls_res, conf, seg_conf)
+            self.run_analysis_on_frame(frame, display_w, display_h, results=results)
+            if self.save_mode_var.get() == "auto":
+                self._save_results(*self._last_result)
+            shown, _kind = display_class_name(cls_res)
+            self.lbl_status.configure(text=f"{shown} ({conf*100:.1f}%) | {elapsed:.3f} s")
+        except Exception as e:
+            print(f"Eredmény megjelenítés hiba: {e}")
+            self.lbl_status.configure(text=f"Hiba: {e}")
+        finally:
+            self._analysis_busy = False
+            self.btn_analyze.configure(state="normal")
 
     def on_close(self):
         print("Closing application...")
+        try:
+            self.root.unbind_all("<Key-space>")
+        except tk.TclError:
+            pass
         if self.video_thread:
             self.video_thread.stop()
         if getattr(self, "_db_conn", None) is not None:
