@@ -1,32 +1,20 @@
 # Alkalmazás használati útmutató (HU)
 
-Ez a dokumentum a `live_capture_app.py` futtatásához ad rövid, gyakorlati lépéseket.
-
 ## 1) Előkészületek
 
-- Python: `3.11.x`
-- Függőségek:
-
-```bash
-python -m pip install -r requirements_app.txt
-python -m pip install pygrabber
-```
-
-- Modellfájlok a projekt gyökerében:
-  - `checkpoints_0409/` (DeepLabV3+)
-  - `checkpoints_unet/`
-  - `classificator_models/`
-
-Pontos fájlnév- és mappaséma:
+- Függőségek: `python -m pip install -r requirements_app.txt` (torch és TensorFlow nélkül).
+- DINOv2 modell: `models/dinov2_polyp.onnx` és `models/dinov2_polyp.json`. Más helyről: környezeti változó `DINOV2_MODEL_PATH` (a `.json` az `.onnx` mellett legyen).
+- Opcionális, régi modellek: `python -m pip install -r requirements_legacy.txt`, majd a fájlok a projekt gyökerében:
 
 ```
 checkpoints_0409/best_model_0409_epoch_31.pth
 checkpoints_unet/best_model_epoch_22.pth
-classificator_models/cnn_s2_lr2e4_tb_os.keras   (vagy bármely más *.keras; a legfrissebb kerül kiválasztásra)
+classificator_models/cnn_s2_lr2e4_tb_os.keras   (vagy bármely *.keras, a legfrissebb kerül kiválasztásra)
 classificator_models/vit_gui_share/vit_final_224.pth
 ```
 
-Klasszifikátor út felülírása: környezeti változó `CLASSIFIER_MODEL_PATH` = teljes út egy `.keras` fájlhoz.
+A Keras útvonal felülírása: `CLASSIFIER_MODEL_PATH`, a ViT-é: `VIT_MODEL_PATH`.
+Az app csak azt a modellt kínálja a menüben, ami ténylegesen betöltődött.
 
 ## 2) Indítás
 
@@ -36,37 +24,33 @@ python live_capture_app.py
 
 ## 3) Bemeneti források
 
-Az alkalmazás több forrást kezel:
+- kamera (a `Forrás` listában),
+- videófájl (`.mp4`, `.avi`, `.mov`, `.mkv` az app mappájában),
+- szimuláció: az `images/` mappa képei.
 
-- kamera (ha elérhető),
-- videófájl (`.mp4`, `.avi`, `.mov`, `.mkv`),
-- szimulációs mód (`images/` mappa).
+## 4) Kezelés
 
-## 4) Fő működés
+- `Élő indítás` / `Szimuláció`: a kiválasztott forrás indítása.
+- `Élő elemzés`: folyamatos elemzés a képkockákon, hőtérkép nélkül.
+- `Elemzés (Space)`: pillanatkép elemzése.
+- `Klasszifikátor`:
+  - **DINOv2** (alap) és **ViT-B/16**: teljes képes klasszifikáció, szegmentálás nincs. A `Szegmentáló` menü ilyenkor tiltott, a magyarázat csak `Klasszifikáció` vagy `Ki`.
+  - **ResNet50V2**: szegmentálás és ROI klasszifikáció, a `Szegmentáló` menü (DeepLabV3+ / U-Net) aktív.
+- `Magyarázat`: DINOv2-nél a gráfba épített Grad-CAM, ViT-nél attention, ResNetnél Grad-CAM. Az `M` billentyű a kiválasztott magyarázat és a `Ki` között vált.
+- `Kézi mentés` / `Auto mentés`, `Mentés`: PNG képek és SQLite sor a `saved_results/` mappába. A napló rögzíti, melyik modellek futottak.
 
-Az ablak induláskor kitölti a munkaterületet, a monitor arányában (16:9, 16:10 vagy 4:3), utána nem méretezhető. A 16:10 ugyanazt az elrendezést használja, mint a 16:9: egy beállítássor, bal oldalon két kisebb kép egymás alatt, jobb oldalon a nagy eredmény.
-
-- `Élő indítás`: élő forrás indítása.
-- `Szimuláció`: képmappás teszt.
-- `Elemzés (Space)` vagy `Space`: pillanatkép elemzés.
-- Az eredményen az osztálynév JNET nélkül jelenik meg (`Nem neoplasztikus` / `Neoplasztikus`), mellette a konfidencia. ResNet úton külön látszik a szegmentáció százaléka is.
-- `Szegmentáló` legördülő: DeepLabV3+ / U-Net (**csak ResNet klasszifikátornál** aktív).
-- `Modell` legördülő (klasszifikátor):
-  - **ViT-B/16** (alap, ha a `vit_final_224.pth` megvan): **csak full-frame klasszifikáció** — **szegmentálás nem fut**. Softmax `p1 ≥ 0.5`.
-  - **ResNet50V2**: szegmentálás + **ROI** fehér háttéren (512×512).
-- `Magyarázat` menü: ViT attention / ResNet Grad-CAM / szegmentálás Grad-CAM (utóbbi ResNet úton), vagy ki. Az `M` billentyű a kiválasztott magyarázat és a Ki állapot között vált.
+Billentyűzet: `Tab` / `Shift+Tab` lépked a vezérlők között, `Enter` aktivál, `Space` bárhonnan elemzést indít (ezért fókuszált vezérlőn sem kapcsol, ott `Enter` kell).
 
 ## 5) Kimenetek
 
-A futás során létrejön:
-
-- `saved_results/` (mentett képek/eredmények),
+- `saved_results/` (mentett képek),
 - `saved_results/predictions.db` (SQLite napló),
-- `performance_log.csv` (latencia napló).
+- `performance_log.csv` (késleltetés napló),
+- `LiveCapture_crash.log` (indítási hiba esetén).
 
 ## 6) Gyakori hibák
 
-- **Klasszifikátor nem töltődik**: ellenőrizd a `classificator_models/vit_gui_share/vit_final_224.pth` (ViT) és/vagy a `.keras` fájlt (ResNet).
-- **ViT gyenge eredmény**: ne adj croplt / fehér hátteres ROI-t — a modell teljes NBI frame-re tanult.
-- **Nincs kamera**: videófájl vagy szimulációs mód használata.
-- **Lassú futás**: CPU-only környezetben a ViT (~86 M param) lassabb lehet, mint a Keras ResNet.
+- **Nincs betöltött modell**: az állapotsor kiírja, hova várja a DINOv2 `.onnx` fájlt.
+- **Régi modell nem jelenik meg a menüben**: hiányzik a `torch` / `tensorflow` (`requirements_legacy.txt`), vagy a fájl a fenti helyen.
+- **Nincs kamera**: videófájl vagy szimulációs mód használata. Kameranevekhez kell a `pygrabber` (a `requirements_app.txt` Windowson telepíti).
+- **Lassú futás**: a DINOv2 CPU-n fut, a Grad-CAM-mel együtt egy elemzés 0.75 s volt a fejlesztői gépen (mért).

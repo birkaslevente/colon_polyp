@@ -1,0 +1,26 @@
+{
+  "model": "dinov2",
+  "variant": "facebook/dinov2-base",
+  "framework": "onnx",
+  "img_size": 224,
+  "patch_size": 14,
+  "cam_grid": 16,
+  "input": "float32 NCHW RGB in [0,1], square letterboxed (black fill) to img_size; batch=1",
+  "outputs": {
+    "probs": "float32 [1,2] softmax; index 1 = class_1_OTHER (neoplasztikus)",
+    "cam": "float32 [1,2,G,G] raw ReLU Grad-CAM per class (use postprocess.py)"
+  },
+  "class_names": [
+    "class_0_JNET_1",
+    "class_1_OTHER"
+  ],
+  "threshold": 0.5,
+  "mean_std_inside_graph": true,
+  "source": {
+    "ckpt": "checkpoints/final_base224_v1_foldall.pt",
+    "mode": "full",
+    "fold": null,
+    "val_bacc": null,
+    "epoch": null
+  }
+}

@@ -1,25 +1,13 @@
-#
-# Minimális futtatási függőségek a GUI apphoz (`live_capture_app.py`).
-#
-# Telepítés:
+# Futtatási függőségek a GUI apphoz (live_capture_app.py). Torch és TensorFlow nem kell.
 #   python -m pip install -r requirements_app.txt
 #
-# Megjegyzés:
-# - Javasolt Python: 3.11.x (a projekt zenbook_venv: 3.11.5). Más főverzióval
-#   a PyInstaller build és a wheel-ek eltérhetnek → DLL / import hibák lehetnek.
-# - Kézi pip esetén PyTorch: https://pytorch.org/ (CPU/CUDA választás).
-#
+# A régi modellek (DeepLabV3+, U-Net, ViT-B/16, ResNet50V2) külön csomagjai: requirements_legacy.txt
 
-# Core
 numpy
 pillow
 opencv-python
-matplotlib
 customtkinter
+onnxruntime
 
-# Deep learning
-torch
-torchvision
-segmentation-models-pytorch
-tensorflow
-
+# DirectShow kameranevek a Forrás listához. Nélküle "Camera 0..4" index-lista jelenik meg.
+pygrabber; sys_platform == "win32"

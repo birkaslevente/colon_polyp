@@ -286,7 +286,7 @@ VIT_ATTENTION_FLOOR = 0.25
 def vit_attention_map(model: nn.Module, input_tensor: torch.Tensor) -> np.ndarray:
     """CLS→patch attention from the last ViT encoder block; returns 224×224 map in [0,1].
 
-    Not Grad-CAM — mean over attention heads. Patch grid is 14×14 for ViT-B/16 @ 224.
+    Not Grad-CAM: mean over attention heads. Patch grid is 14×14 for ViT-B/16 @ 224.
     Values below VIT_ATTENTION_FLOOR are zero so the overlay starts at light blue.
     """
     model.eval()
@@ -318,7 +318,7 @@ def vit_attention_map(model: nn.Module, input_tensor: torch.Tensor) -> np.ndarra
     if not captured:
         return np.zeros((224, 224), dtype=np.float32)
 
-    # weights: (B, num_heads, seq, seq) — CLS at index 0, patches 1..N
+    # weights: (B, num_heads, seq, seq), CLS at index 0, patches 1..N
     w = captured[-1]
     if w.dim() == 3:
         # (B, seq, seq) already averaged
@@ -329,7 +329,7 @@ def vit_attention_map(model: nn.Module, input_tensor: torch.Tensor) -> np.ndarra
     n_patch = int(cls_to_patch.numel())
     side = int(round(n_patch ** 0.5))
     if side * side != n_patch:
-        # Unexpected layout — fall back to flat resize
+        # Unexpected layout: fall back to flat resize
         cam = cls_to_patch.float().cpu().numpy()
         cam = normalize_cam(cam)
         cam = cv2.resize(cam, (224, 224), interpolation=cv2.INTER_LINEAR)

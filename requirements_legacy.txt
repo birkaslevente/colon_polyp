@@ -1,0 +1,11 @@
+# Csak a régi modellekhez: DeepLabV3+ / U-Net szegmentálás, ViT-B/16 (PyTorch) és ResNet50V2 (Keras).
+# A DINOv2 klasszifikátorhoz nem kell. Előbb: requirements_app.txt
+#   python -m pip install -r requirements_legacy.txt
+#
+# Javasolt Python: 3.11.x (a torch / tensorflow kerekek ehhez készülnek).
+# Ha ezek hiányoznak, az app elindul, és csak a betöltött modelleket kínálja.
+
+torch
+torchvision
+segmentation-models-pytorch
+tensorflow

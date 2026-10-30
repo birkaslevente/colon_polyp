@@ -47,7 +47,7 @@ def load_vit_checkpoint(pth_path: str | Path, device: torch.device) -> nn.Module
 def _transform() -> transforms.Compose:
     return transforms.Compose(
         [
-            transforms.Resize((IMG_SIZE, IMG_SIZE)),  # not CenterCrop — full frame
+            transforms.Resize((IMG_SIZE, IMG_SIZE)),  # not CenterCrop: full frame
             transforms.ToTensor(),
             transforms.Normalize(MEAN, STD),
         ]
