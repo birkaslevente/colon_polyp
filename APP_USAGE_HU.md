@@ -17,7 +17,16 @@ python -m pip install pygrabber
   - `checkpoints_unet/`
   - `classificator_models/`
 
-Pontos fájlnév- és mappaséma: `deploy_exe/MODELLOK_MASOLASA.txt`.
+Pontos fájlnév- és mappaséma:
+
+```
+checkpoints_0409/best_model_0409_epoch_31.pth
+checkpoints_unet/best_model_epoch_22.pth
+classificator_models/cnn_s2_lr2e4_tb_os.keras   (vagy bármely más *.keras; a legfrissebb kerül kiválasztásra)
+classificator_models/vit_gui_share/vit_final_224.pth
+```
+
+Klasszifikátor út felülírása: környezeti változó `CLASSIFIER_MODEL_PATH` = teljes út egy `.keras` fájlhoz.
 
 ## 2) Indítás
 
