@@ -261,30 +261,12 @@ class VideoCaptureThread:
         self.video_file_mode = False
         
         if self.simulation_mode and self.image_folder:
-             allowed_ids = [
-                 'PI009', 'PI015', 'PI016', 'PI037', 'PI048', 'PI050', 'PI055', 'PI057', 'PI068',
-                 'PI072', 'PI073', 'PI078', 'PI080', 'PI085', 'PI086', 'PI091', 'PI112', 'PI113',
-                 'PI114', 'PI121', 'PI123', 'PI130', 'PI135', 'PI136', 'PI137', 'PI142', 'PI149',
-                 'PI152', 'PI166', 'PI171', 'PI175', 'PI178', 'PI181', 'PI184', 'PI187', 'PI189',
-                 'PI191', 'PI197', 'PI198', 'PI204', 'pi205', 'PI207', 'PI210', 'PI211', 'PI219',
-                 'PI224', 'PI230', 'PI238', 'PI243', 'PI247', 'PI249', 'PI252', 'PI261', 'PI266',
-                 'PI270', 'PI272', 'PI277', 'PI280', 'PI290', 'PI298', 'PI310', 'PI335', 'PI338',
-                 'PI348', 'PI349', 'PI367', 'PI368', 'PI370', 'PI372', 'PI375', 'PI376', 'PI389',
-                 'PI390', 'PI399', 'PI400', 'PI405', 'PI408', 'PI415', 'PI418', 'PI419', 'PI432',
-                 'PI433', 'PI445', 'PI454', 'PI456', 'PI462', 'PI468', 'PI472', 'PI473', 'PI478',
-                 'PI480'
-             ]
-             allowed_ids_lower = [pid.lower() for pid in allowed_ids]
-
-             all_files = [f for f in os.listdir(image_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-             self.image_files = []
-             
-             for f in all_files:
-                 f_lower = f.lower()
-                 if any(pid in f_lower for pid in allowed_ids_lower):
-                     self.image_files.append(os.path.join(image_folder, f))
-                     
-             print(f"Simulation mode: Found {len(self.image_files)} images matching filter (Total allowed IDs: {len(allowed_ids)}).")
+            self.image_files = sorted(
+                os.path.join(image_folder, f)
+                for f in os.listdir(image_folder)
+                if f.lower().endswith((".png", ".jpg", ".jpeg"))
+            )
+            print(f"Szimuláció: {len(self.image_files)} kép a mappában.")
 
         if not self.simulation_mode:
             if isinstance(src, str):
@@ -371,6 +353,9 @@ class VideoCaptureThread:
                     last_sim_update = time.time()
                 time.sleep(0.1)
 
+        if self.cap:
+            self.cap.release()
+
     def read(self):
         with self.lock:
             if self.frame is None:
@@ -405,10 +390,9 @@ class VideoCaptureThread:
             return float(max(0.0, min(100.0, 100.0 * pos / total)))
 
     def stop(self):
+        """Nem blokkol: a kamerát a saját szál engedi el, így a GUI nem fagy egy lassú cap.read() miatt."""
         self.running = False
-        self.thread.join(timeout=5.0)
-        if self.cap:
-            self.cap.release()
+        self.thread.join(timeout=0.5)
 
 @dataclass
 class ExplainContext:

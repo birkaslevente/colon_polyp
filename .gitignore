@@ -1,98 +1,32 @@
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Szerkesztő, ügynökök
 .idea/
 .vscode/
-
-# --- Képek, adat, naplók (ne kerüljön a repóba) ---
-/images/
-/saved_results/
-/Kvasir-SEG/
-Kvasir-SEG/
-Kvasir*/
-kvasir*/
-performance_log.csv
-LiveCapture_crash.log
-debug_run.log
-
-# Tömörített archív adat (nem videó)
-*.zip
-
-# Eseti személyes / hibaképek a gyökérben
-/*.pdf
-erinto*.csv
-erinto*.png
-
-# VOC / Cityscapes / eredeti upstream adat
-VOCdevkit/
-cityscapes/
-
-# Tanítási / teszt kimenetek
-results/
-test_results/
-checkpoints_bak/
-
-# Tanított modellek / súlyok (nagy fájlok — GitHubra ne, lásd MODELLOK_MASOLASA)
-checkpoints/
-checkpoints_unet/
-checkpoints_0409/
-classificator_models/
-external_models/
-polyp_trained_e12_best_deeplabv3plus_mobilenet_voc_os16/
-nerthus/
-*.pth
-*.keras
-*.h5
-*.onnx
-*.pt
-
-# Python környezet és build kimenet
-zenbook_venv/
-venv/
-build_venv/
-.venv/
-dist/
-build/
-*.egg-info/
-
-# Eszközök / IDE
 .cursor/
 .cursorignore
-*Copilot*Chat*.md
+agent_files/
+anti-slop/
 
-# Mentések, WSL, nagy backup mappák
-backups/
-wsl/
-random_test/
-feature_maps/
-samples/
-metrics/
-szakdolgozat/
-tdk/
+# Az app kimenetei
+/images/
+/saved_results/
+performance_log.csv
+LiveCapture_crash.log
+*.log
 
-# Eseti segédszkriptek / lokális kísérleti fájlok
-temp_*.py
-update_*.py
-do_replacements*.py
-fix_*.py
-verify.py
-test_load.py
-parens.txt
-texput.log
-
-# Minimalis, reprodukálható modellkészlet (pontosan 2 checkpoint)
-!checkpoints_0409/
-checkpoints_0409/*
-!checkpoints_0409/best_model_0409_epoch_31.pth
-
-!checkpoints_unet/
-checkpoints_unet/*
-!checkpoints_unet/best_model_epoch_22.pth
-
-**/*.ipynb
-**/*.bat
-# Kivetelek a TDK_Beta.latex buildhez
-!tdk/sze_logo.png
-!tdk/pipeline_diagram.png
-!tdk/3 minta predikcio avg iou 0.9329.png
-!feature_maps/pi486-R-H/SUMMARY_pi486-R-H.png
-!checkpoints_0409/training_curves_0409.png
+# Modellsúlyok (nagy fájlok, külön kell másolni; a models/*.json konfig követett)
+*.onnx
+*.pth
+*.pt
+*.keras
+*.h5
+checkpoints*/
+classificator_models/
