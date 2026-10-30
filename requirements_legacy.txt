@@ -1,11 +1,10 @@
-# Csak a régi modellekhez: DeepLabV3+ / U-Net szegmentálás, ViT-B/16 (PyTorch) és ResNet50V2 (Keras).
+# Csak a régi modellekhez: DeepLabV3+ szegmentálás (PyTorch) és ResNet50V2 klasszifikáció (Keras).
 # A DINOv2 klasszifikátorhoz nem kell. Előbb: requirements_app.txt
 #   python -m pip install -r requirements_legacy.txt
 #
-# Javasolt Python: 3.11.x (a torch / tensorflow kerekek ehhez készülnek).
-# Ha ezek hiányoznak, az app elindul, és csak a betöltött modelleket kínálja.
+# Windowson a PyPI torch kereke CPU-s, ez a kisebb. A tensorflow kb. 1,4 GB.
+# Opcionális: segmentation-models-pytorch (U-Net) és a ViT-B/16 (torchvision, a súlyfájl külön).
 
 torch
 torchvision
-segmentation-models-pytorch
 tensorflow

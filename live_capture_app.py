@@ -28,7 +28,6 @@ from polyp_infer import PolypClassifier, letterbox_to_square
 
 try:
     import torch
-    import segmentation_models_pytorch as smp
     import utils.ext_transforms as et
     from network.modeling import deeplabv3plus_mobilenet
     from utils.explainability import (
@@ -50,6 +49,11 @@ try:
 except ImportError as _legacy_exc:
     torch = None
     LEGACY_IMPORT_ERROR = _legacy_exc
+
+try:
+    import segmentation_models_pytorch as smp
+except ImportError:
+    smp = None
 
 
 def _setup_tensorflow():
@@ -612,7 +616,9 @@ class MedicalAnalyzer:
         return model
 
     def _load_deeplab(self):
-        model = deeplabv3plus_mobilenet(num_classes=NUM_CLASSES, output_stride=OUTPUT_STRIDE)
+        model = deeplabv3plus_mobilenet(
+            num_classes=NUM_CLASSES, output_stride=OUTPUT_STRIDE, pretrained_backbone=False
+        )
         model = self._load_checkpoint(model, DEEPLAB_CHECKPOINT)
         if model is None:
             return None
@@ -621,6 +627,8 @@ class MedicalAnalyzer:
         return model
 
     def _load_unet(self):
+        if smp is None or not os.path.exists(UNET_CHECKPOINT):
+            return None
         model = smp.Unet(encoder_name="resnet34", encoder_weights=None, in_channels=3, classes=1)
         model = self._load_checkpoint(model, UNET_CHECKPOINT)
         if model is None:
