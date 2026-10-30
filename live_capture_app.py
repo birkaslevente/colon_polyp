@@ -495,7 +495,7 @@ class MedicalAnalyzer:
             clf = PolypClassifier(self.dinov2_path)
             clf.predict(Image.new("RGB", (64, 64)))
             self.dinov2 = clf
-            print(f"DINOv2 classifier: {self.dinov2_path} (input {clf.size}x{clf.size}, küszöb {clf.threshold})")
+            print(f"DINOv2 classifier: {self.dinov2_path} (hálóbemenet: {clf.size}x{clf.size} négyzet, a kép arányát megtartva, fekete kitöltéssel; küszöb {clf.threshold})")
         except Exception as exc:
             self.load_notes.append(f"DINOv2 betöltés sikertelen: {exc}")
             print(self.load_notes[-1])

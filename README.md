@@ -36,7 +36,8 @@ Kimenetek: `saved_results/`, `saved_results/predictions.db`, `performance_log.cs
 - Bemenet: `float32 [1,3,224,224]`, RGB, 0..1, négyzetes letterbox fekete kitöltéssel. Az ImageNet mean/std a gráfban van.
 - Kimenet `probs`: `[1,2]` softmax, az 1-es index a neoplasztikus (`class_1_OTHER`), küszöb 0.5.
 - Kimenet `cam`: `[1,2,16,16]` ReLU Grad-CAM mindkét osztályra, a `polyp_infer.py` ebből készít overlayt.
-- Architektúra: Meta DINOv2 ViT-B/14, lineáris fej. 5-fold páciens-split CV: BAcc 0.918, AUC 0.957, érzékenység 0.911, specificitás 0.925.
+- Architektúra: Meta DINOv2 ViT-B/14, lineáris fej. A mellékelt súly az összes adaton tanult (`foldall`), ezért saját, független kiértékelése nincs. Az 5-fold páciens-split CV eredmények (BAcc 0.918, AUC 0.957, érzékenység 0.911, specificitás 0.925) a tanítási jegyzetből származnak, nem ebből az alkalmazásból.
+- A Grad-CAM hőtérkép a modellbe van sütve. 24 mintaképen nézve egy patch méretű, a képszélen és a fekete sávban is megjelenő pontokat mutat, nem a polipot, ezért lokalizációra nem használható.
 - Egy elemzés CPU-n 0.75 s volt a fejlesztői gépen (mért, gépfüggő).
 
 Parancssorból: `python polyp_infer.py models/dinov2_polyp.onnx kep.png --out overlay.png`
